@@ -1,11 +1,11 @@
-from flask import request, render_template_string
+from flask import request, render_template_string, Response
 from openai import OpenAI
 import config
 
 # Initialize the OpenAI client with your API key
 client = OpenAI(api_key=config.OPEN_AI_API_KEY)
 
-DOMAIN = "chat.com"
+DOMAIN = "chatgpt.com"
 
 messages = []
 selected_model = "gpt-5.4"
@@ -67,7 +67,7 @@ def handle_request(req):
 		content, status_code = handle_get(req)
 	else:
 		content, status_code = "Not Found", 404
-	return content, status_code
+	return Response(content, status=status_code, content_type='text/html')
 
 def handle_get(request):
 	return chat_interface(request), 200

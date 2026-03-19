@@ -4,36 +4,45 @@ from bs4 import BeautifulSoup
 
 DOMAIN = "npr.org"
 
-# Description:
-# This extension handles requests to the NPR website (npr.org).
-# It modifies URLs to ensure they are compatible with older browsers by converting them to absolute URLs.
-# Additionally, it removes the <header> tag containing the "Text-Only Version" message and link to the full site.
-# It redirects all requests from npr.org and text.npr.org to the proxy-modified npr.org while keeping the original domain in the address bar.
-
 def handle_get(req):
 	url = f"https://text.npr.org{req.path}"
 	try:
 		response = requests.get(url)
 
-		# Parse the HTML and remove the <header> tag
 		soup = BeautifulSoup(response.text, 'html.parser')
+
+		# Remove header tag
 		header_tag = soup.find('header')
 		if header_tag:
 			header_tag.decompose()
-		
-		# Modify relative URLs to absolute URLs
+
+		# Remove style tags and link stylesheets (MacWeb can't use them)
+		for tag in soup.find_all(['style', 'link', 'script']):
+			tag.decompose()
+
+		# Remove inline styles
+		for tag in soup.find_all(True):
+			if tag.has_attr('style'):
+				del tag['style']
+			if tag.has_attr('class'):
+				del tag['class']
+
+		# Modify relative URLs to absolute URLs pointing back through proxy
 		for tag in soup.find_all(['a', 'img']):
 			if tag.has_attr('href'):
-				tag['href'] = f"/{tag['href'].lstrip('/')}"
+				href = tag['href']
+				if href.startswith('/'):
+					tag['href'] = f"http://npr.org{href}"
+				elif href.startswith('https://'):
+					tag['href'] = href.replace('https://', 'http://')
 			if tag.has_attr('src'):
-				tag['src'] = f"/{tag['src'].lstrip('/')}"
+				src = tag['src']
+				if src.startswith('/'):
+					tag['src'] = f"http://npr.org{src}"
 
 		return str(soup), response.status_code
 	except Exception as e:
-		return f"Error: {str(e)}", 500
-
-def handle_post(req):
-	return "POST method not supported", 405
+		return f"<html><body><b>Error:</b> {str(e)}</body></html>", 500
 
 def handle_request(req):
 	if req.host == "text.npr.org":

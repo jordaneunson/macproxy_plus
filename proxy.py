@@ -87,12 +87,35 @@ def handle_request(path):
 
 	override_response = handle_override_extension(scheme)
 	if override_response is not None:
-		return process_response(override_response, request.url)
+		if isinstance(override_response, (Response, WerkzeugResponse)):
+			return override_response
+		if isinstance(override_response, tuple):
+			content = override_response[0]
+			status_code = override_response[1] if len(override_response) > 1 else 200
+		else:
+			content = override_response
+			status_code = 200
+		if isinstance(content, bytes):
+			content = content.decode('utf-8', errors='replace')
+		content = content.replace('https://', 'http://')
+		return Response(content, status=status_code, content_type='text/html')
 
 	matching_extension = find_matching_extension(host)
 	if matching_extension:
 		response = handle_matching_extension(matching_extension)
-		return process_response(response, request.url)
+		if isinstance(response, (Response, WerkzeugResponse)):
+			return response
+		# Wrap extension responses to skip transcoding but convert https to http
+		if isinstance(response, tuple):
+			content = response[0]
+			status_code = response[1] if len(response) > 1 else 200
+		else:
+			content = response
+			status_code = 200
+		if isinstance(content, bytes):
+			content = content.decode('utf-8', errors='replace')
+		content = content.replace('https://', 'http://')
+		return Response(content, status=status_code, content_type='text/html')
 	
 	# Only handle image requests here if we're not using an extension
 	if is_image_url(request.url) and not (override_extension or matching_extension):

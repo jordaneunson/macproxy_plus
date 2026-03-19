@@ -1,0 +1,21 @@
+services:
+  macproxy:
+    build: .
+    container_name: macproxy_plus
+    ports:
+      - "0.0.0.0:5001:5001"
+    volumes:
+      - ./config.py:/app/config.py:ro
+      - macproxy_cache:/app/cache
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - macproxy_network
+
+volumes:
+  macproxy_cache:
+
+networks:
+  macproxy_network:
+    driver: bridge
