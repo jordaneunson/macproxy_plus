@@ -6,6 +6,7 @@ services:
       - "0.0.0.0:5001:5001"
     volumes:
       - ./config.py:/app/config.py:ro
+      - ./extensions:/app/extensions
       - macproxy_cache:/app/cache
     restart: unless-stopped
     environment:
