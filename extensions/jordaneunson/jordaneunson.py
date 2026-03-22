@@ -128,19 +128,21 @@ def listing_page(manifest):
 
     root = manifest.get('root', [])
     if root:
-        html += "<b>Recipes:</b><br>\n"
+        html += "<b>Recipes:</b><br>\n<ul>\n"
         for fname in sorted(root):
             slug = re.sub(r'\.txt$', '', fname).replace(' ', '_')
             display = re.sub(r'\.txt$', '', fname).title()
-            html += f'<a href="/recipe/{slug}">{display}</a><br>\n'
+            html += f'<li><a href="/recipe/{slug}">{display}</a></li>\n'
+        html += "</ul>\n"
 
     folders = manifest.get('folders', {})
     for folder_name in sorted(folders.keys()):
-        html += f"<hr>\n<b>{folder_name}:</b><br>\n"
+        html += f"<hr>\n<b>{folder_name}:</b><br>\n<ul>\n"
         for fname in sorted(folders[folder_name]):
             slug = folder_name + '/' + re.sub(r'\.txt$', '', fname).replace(' ', '_')
             display = re.sub(r'\.txt$', '', fname).title()
-            html += f'<a href="/recipe/{slug}">{display}</a><br>\n'
+            html += f'<li><a href="/recipe/{slug}">{display}</a></li>\n'
+        html += "</ul>\n"
 
     return make_page("Gastronomy - Jordan Eunson", html)
 
