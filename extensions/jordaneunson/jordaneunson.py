@@ -37,14 +37,18 @@ def recipe_to_html(raw, name):
     """Convert gastro recipe pseudocode to simple HTML 3.2."""
     lines = raw.splitlines()
     html = recipe_header(name)
+    total = len(lines)
+    pad = len(str(total))
     html += "<font face=\"Monaco\" size=\"3\">\n"
-    for line in lines:
+    for i, line in enumerate(lines, 1):
         # Escape HTML entities
         line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         # Preserve whitespace without <pre>
         line = line.replace('\t', '&#160;&#160;&#160;&#160;')
         line = line.replace(' ', '&#160;')
-        html += line + "<br>\n"
+        # Right-aligned line number
+        num = str(i).rjust(pad).replace(' ', '&#160;')
+        html += f"{num}&#160;&#160;{line}<br>\n"
     html += "</font>\n"
     return html
 
