@@ -680,6 +680,9 @@ fresh hacks every day                 /___/
 	for char, replacement in char_map.items():
 		updated_html = updated_html.replace(char, replacement)
 
+	# Rewrite https links to http for classic Mac browsers
+	updated_html = updated_html.replace('https://hackaday.com', 'http://hackaday.com')
+
 	# Also catch any remaining non-ASCII and replace with ?
 	cleaned = []
 	for ch in updated_html:
