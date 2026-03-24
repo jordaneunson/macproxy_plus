@@ -101,24 +101,35 @@ ensure_in_repo() {
     return
   fi
 
-  # If a macproxy_plus directory already exists, pull latest and use it
-  if [[ -d "macproxy_plus" && -f "macproxy_plus/proxy.py" ]]; then
-    print_step "Found existing macproxy_plus directory, pulling latest..."
-    cd macproxy_plus
+  local default_dir="$HOME/Documents/macproxy_plus"
+
+  echo ""
+  read -rp "  Install location [${default_dir}]: " install_dir
+  install_dir="${install_dir:-$default_dir}"
+
+  # Expand ~ if they typed it
+  install_dir="${install_dir/#\~/$HOME}"
+
+  # If it already exists, pull latest
+  if [[ -d "$install_dir" && -f "$install_dir/proxy.py" ]]; then
+    print_step "Found existing installation at ${install_dir}, pulling latest..."
+    cd "$install_dir"
     git pull origin master 2>/dev/null || true
     print_ok "Updated existing installation."
     return
   fi
 
-  print_step "Cloning MacProxy Plus..."
+  print_step "Cloning MacProxy Plus into ${install_dir}..."
   if ! command -v git &>/dev/null; then
     print_err "Git is not installed. Please install Git and try again."
     exit 1
   fi
 
-  git clone "$REPO_URL" macproxy_plus
-  cd macproxy_plus
-  print_ok "Cloned into ./macproxy_plus"
+  # Create parent directory if needed
+  mkdir -p "$(dirname "$install_dir")"
+  git clone "$REPO_URL" "$install_dir"
+  cd "$install_dir"
+  print_ok "Cloned into ${install_dir}"
 }
 
 # ── Extensions ────────────────────────────────────────────────────────────────
