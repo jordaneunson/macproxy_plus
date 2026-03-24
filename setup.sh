@@ -6,25 +6,16 @@
 
 set -e
 
-# ── Terminal input (needed for curl | bash) ───────────────────────────────────
-# When piped via curl, stdin is the script — not the keyboard.
-# Open /dev/tty on fd 3 and read user input from there.
+# ── Handle curl | bash ────────────────────────────────────────────────────────
+# When piped, bash reads the script from stdin. We need stdin free for user input.
+# Download ourselves to a temp file and re-exec with stdin connected to terminal.
 if [[ ! -t 0 ]]; then
-  if [[ -e /dev/tty ]]; then
-    exec 3</dev/tty
-  else
-    echo "Error: No terminal available for interactive input."
-    echo "Try: git clone https://github.com/jordaneunson/macproxy_plus && cd macproxy_plus && ./setup.sh"
-    exit 1
-  fi
-else
-  exec 3<&0
+  _SETUP_TMPFILE="$(mktemp "${TMPDIR:-/tmp}/macproxy_setup.XXXXXX.sh")"
+  # We're being piped — but bash hasn't read the whole file yet.
+  # Use curl to download the full script fresh.
+  curl -fsSL "https://raw.githubusercontent.com/jordaneunson/macproxy_plus/master/setup.sh" > "$_SETUP_TMPFILE"
+  exec bash "$_SETUP_TMPFILE"
 fi
-
-# Wrapper: read from terminal (fd 3) instead of stdin
-tty_read() {
-  read "$@" <&3
-}
 
 # ── Colors & ASCII flair ──────────────────────────────────────────────────────
 BOLD='\033[1m'
@@ -117,7 +108,7 @@ ensure_in_repo() {
   local default_dir="$HOME/Documents/macproxy_plus"
 
   echo ""
-  tty_read -rp "  Install location [~/Documents/macproxy_plus]: " install_dir
+  read -rp "  Install location [~/Documents/macproxy_plus]: " install_dir
   install_dir="${install_dir:-$default_dir}"
 
   # Expand ~ if they typed it
@@ -254,7 +245,7 @@ run_extension_menu() {
     echo -e "${DIM}  ────────────────────────────────────────────────────────────${RESET}"
     echo -e "  ${BOLD}a)${RESET} Enable all   ${BOLD}n)${RESET} Disable all   ${BOLD}s)${RESET} Save & continue"
     echo ""
-    tty_read -rp "  Toggle #: " choice
+    read -rp "  Toggle #: " choice
 
     if [[ "$choice" == "s" || "$choice" == "S" ]]; then
       break
@@ -374,10 +365,10 @@ collect_credentials() {
 
     while true; do
       if [[ "$key" == *TOKEN* || "$key" == *KEY* ]]; then
-        tty_read -rsp "  $prompt: " value
+        read -rsp "  $prompt: " value
         echo ""
       else
-        tty_read -rp "  $prompt: " value
+        read -rp "  $prompt: " value
       fi
 
       if [[ -n "$value" ]]; then
@@ -511,7 +502,7 @@ main() {
     echo -e "    ${BOLD}1)${RESET} Reconfigure extensions & API keys"
     echo -e "    ${BOLD}2)${RESET} Just rebuild & restart (keep current config)"
     echo ""
-    tty_read -rp "  Choice [1/2]: " rerun_choice
+    read -rp "  Choice [1/2]: " rerun_choice
 
     if [[ "$rerun_choice" == "2" ]]; then
       launch_docker
