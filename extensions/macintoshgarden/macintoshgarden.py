@@ -3,8 +3,14 @@ from bs4 import BeautifulSoup
 from flask import Response, stream_with_context
 import urllib.parse
 import re
+import time
 
 DOMAIN = "macintoshgarden.org"
+
+# Simple TTL cache for fetched pages (URL -> (timestamp, response_content))
+_page_cache = {}
+_CACHE_TTL = 900  # 15 minutes for all pages
+_MAX_CACHE_ENTRIES = 200
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
@@ -43,9 +49,12 @@ def make_page(title, body_html):
 
 def search_bar():
     return '''<center>
-<b><a href="http://macintoshgarden.org/">Macintosh Garden</a></b>
-&nbsp;|&nbsp;<a href="http://macintoshgarden.org/apps">Apps</a>
+<a href="http://macintoshgarden.org/apps">Apps</a>
 &nbsp;|&nbsp;<a href="http://macintoshgarden.org/games">Games</a>
+&nbsp;|&nbsp;<a href="http://macintoshgarden.org/guides">Guides</a>
+&nbsp;|&nbsp;<a href="http://macintoshgarden.org/forum">Forum</a>
+&nbsp;|&nbsp;<a href="http://macintoshgarden.org/ftp">FTP</a>
+&nbsp;|&nbsp;<a href="http://macintoshgarden.org/about">About</a>
 <br>
 <form action="http://macintoshgarden.org/search" method="get">
 <input type="text" name="q" size="30">
@@ -64,10 +73,38 @@ def error_page(message, status=500):
     return clean_text(html), status
 
 
-def fetch(url):
+def fetch(url, ttl=None):
     resp = requests.get(url, headers=HEADERS, timeout=15, allow_redirects=True)
     resp.raise_for_status()
     return resp
+
+
+def fetch_cached(url, ttl=None):
+    """Fetch with in-memory caching. Returns response content (bytes)."""
+    if ttl is None:
+        ttl = _CACHE_TTL
+    now = time.time()
+
+    # Check cache
+    if url in _page_cache:
+        cached_time, cached_content = _page_cache[url]
+        if now - cached_time < ttl:
+            return cached_content
+
+    # Evict old entries if cache is full
+    if len(_page_cache) >= _MAX_CACHE_ENTRIES:
+        expired = [k for k, (t, _) in _page_cache.items() if now - t > ttl]
+        for k in expired:
+            del _page_cache[k]
+        # If still full, drop oldest half
+        if len(_page_cache) >= _MAX_CACHE_ENTRIES:
+            sorted_keys = sorted(_page_cache, key=lambda k: _page_cache[k][0])
+            for k in sorted_keys[:len(sorted_keys) // 2]:
+                del _page_cache[k]
+
+    resp = fetch(url)
+    _page_cache[url] = (now, resp.content)
+    return resp.content
 
 
 def handle_request(request):
@@ -89,8 +126,8 @@ def handle_request(request):
     if path == '/' or path == '':
         return handle_homepage()
 
-    # Route: apps or games listing (with optional letter/page)
-    if re.match(r'^/(apps|games)(/.*)?$', path):
+    # Route: apps or games listing (bare, /all, single letter like /a, /b, or with ?page=)
+    if re.match(r'^/(apps|games)(/all|/[a-z0-9])?(\?.*)?$', path):
         return handle_listing(path)
 
     # Route: download proxy
@@ -107,8 +144,8 @@ def handle_request(request):
 
 def handle_homepage():
     try:
-        resp = fetch(BASE_URL + "/")
-        soup = BeautifulSoup(resp.content, 'html.parser')
+        content = fetch_cached(BASE_URL + "/", ttl=_CACHE_TTL)
+        soup = BeautifulSoup(content, 'html.parser')
     except Exception as e:
         return error_page(str(e))
 
@@ -174,8 +211,8 @@ def handle_listing(path):
     target = BASE_URL + path
 
     try:
-        resp = fetch(target)
-        soup = BeautifulSoup(resp.content, 'html.parser')
+        content = fetch_cached(target, ttl=_CACHE_TTL)
+        soup = BeautifulSoup(content, 'html.parser')
     except Exception as e:
         return error_page(str(e))
 
@@ -273,8 +310,8 @@ def handle_search(query):
     target = BASE_URL + "/search/node/" + encoded
 
     try:
-        resp = fetch(target)
-        soup = BeautifulSoup(resp.content, 'html.parser')
+        content = fetch_cached(target)
+        soup = BeautifulSoup(content, 'html.parser')
     except Exception as e:
         return error_page(str(e))
 
@@ -284,8 +321,9 @@ def handle_search(query):
 
     results = []
 
-    for li in soup.select('ol.search-results li, li.search-result'):
-        a_tag = li.find('a', href=True)
+    # Site uses <dl class="search-results"> with <dt>/<dd> pairs
+    for dt in soup.select('dl.search-results dt.title'):
+        a_tag = dt.find('a', href=True)
         if not a_tag:
             continue
         title = a_tag.get_text(strip=True)
@@ -296,18 +334,21 @@ def handle_search(query):
             href = href.replace('https://', 'http://')
 
         snippet = ''
-        snippet_div = li.find('div', class_=re.compile(r'search-snippet|snippet'))
-        if not snippet_div:
-            snippet_div = li.find('p')
-        if snippet_div:
-            snippet = snippet_div.get_text(strip=True)[:150]
-            if len(snippet) == 150:
-                snippet += '...'
-
         category = ''
-        type_span = li.find('span', class_=re.compile(r'type|category'))
-        if type_span:
-            category = type_span.get_text(strip=True)
+        dd = dt.find_next_sibling('dd')
+        if dd:
+            snippet_p = dd.find('p', class_='search-snippet')
+            if snippet_p:
+                snippet = snippet_p.get_text(strip=True)[:150]
+                if len(snippet) == 150:
+                    snippet += '...'
+            info_p = dd.find('p', class_='search-info')
+            if info_p:
+                info_text = info_p.get_text(strip=True)
+                # First word is usually the type (Game, App, etc.)
+                parts = info_text.split(' - ', 1)
+                if parts:
+                    category = parts[0].strip()
 
         results.append((title, href, snippet, category))
 
@@ -354,8 +395,8 @@ def handle_search(query):
 def handle_detail(path):
     target = BASE_URL + path
     try:
-        resp = fetch(target)
-        soup = BeautifulSoup(resp.content, 'html.parser')
+        content = fetch_cached(target)
+        soup = BeautifulSoup(content, 'html.parser')
     except requests.HTTPError as e:
         if e.response is not None and e.response.status_code == 404:
             return error_page('Page not found.', 404)
@@ -456,11 +497,13 @@ def _extract_downloads(soup, path):
     seen = set()
 
     MIRROR_PATTERNS = [
+        r'download\.macintoshgarden\.org',
         r'macintoshgarden\.org\.se',
         r'macintoshgarden\.r-fx\.ca',
         r'files\.macintoshgarden\.org',
         r'macintoshgarden\.org\.de',
         r'ftp\.macintoshgarden',
+        r'old\.mac\.gdn',
         r'www\.macintoshgarden\.org/files',
         r'macintoshgarden\.org/files',
     ]
@@ -477,9 +520,23 @@ def _extract_downloads(soup, path):
         if not (is_mirror or is_file):
             continue
 
+        # Skip screenshots, images, and md5 check links
+        if re.search(r'\.(png|jpg|jpeg|gif|webp)(\?.*)?$', href, re.I):
+            continue
+        if 'arch_md5.php' in href:
+            continue
+        if '/screenshots/' in href:
+            continue
+
         if href in seen:
             continue
         seen.add(href)
+
+        # Dedupe by filename — keep first mirror found for each file
+        fname_key = href.split('/')[-1].split('?')[0].lower()
+        if fname_key in seen:
+            continue
+        seen.add(fname_key)
 
         direct_url = href
         if direct_url.startswith('//'):
@@ -540,9 +597,10 @@ def handle_download(request):
 
     allowed = re.compile(
         r'^https?://(www\.)?(macintoshgarden\.org|'
+        r'download\.macintoshgarden\.org|'
         r'macintoshgarden\.org\.se|macintoshgarden\.r-fx\.ca|'
         r'files\.macintoshgarden\.org|macintoshgarden\.org\.de|'
-        r'ftp\.macintoshgarden)',
+        r'ftp\.macintoshgarden|old\.mac\.gdn)',
         re.I
     )
     if not allowed.match(file_url):
