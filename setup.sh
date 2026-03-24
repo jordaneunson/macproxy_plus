@@ -408,15 +408,13 @@ write_config() {
   done
   config+="]\n"
 
+  # Write the header (with escape sequences interpreted)
+  printf "%b" "$config" > config.py
+
   # Append everything from config.py.example *after* the ENABLED_EXTENSIONS block
   # (keep WHITELISTED_DOMAINS, PRESET, SIMPLIFY_HTML, etc.)
-  local after_block
-  after_block="$(awk '/^WHITELISTED_DOMAINS/,0' config.py.example)"
-  if [[ -n "$after_block" ]]; then
-    config+="\n$after_block"
-  fi
-
-  printf "%b" "$config" > config.py
+  # Use cat/awk to preserve backslashes verbatim — printf %b would mangle them
+  awk '/^WHITELISTED_DOMAINS/,0' config.py.example >> config.py
   print_ok "config.py written."
 }
 
