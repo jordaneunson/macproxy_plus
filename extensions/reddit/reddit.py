@@ -257,7 +257,6 @@ def process_content(content, url):
 					font.append(new_soup.new_tag('br'))
 					
 					li.append(font)
-					li.append(new_soup.new_tag('hr'))
 					ul.append(li)
 
 		# Add navigation buttons
