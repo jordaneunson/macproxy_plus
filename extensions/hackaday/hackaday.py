@@ -407,67 +407,72 @@ fresh hacks every day                 /___/
 	# Add <br> after each comment
 	add_br_after_comments(soup)
 
-	# Process entry-content divs for blog listings and search results
+	# Process blog listings and search results into definition lists
 	if 'hackaday.com/blog/' in url or 'hackaday.com/author/' in url or 'hackaday.com/page/' in url:
-		entry_content_divs = soup.find_all('div', class_='entry-content')
-		for div in entry_content_divs:
-			p_tags = div.find_all('p')
-			content = ''
-			for p in p_tags:
-				content += p.get_text() + ' '
-				p.decompose()
-			
-			content = content.strip()
-			if len(content) > 200:
-				last_space = content[:201].rfind(' ')
-				content = content[:last_space + 1]
-			
-			div.string = content
-			
-			# Find the href in the sibling header
-			header = div.find_previous_sibling('header', class_='entry-header')
-			if header:
-				link = header.find('a', rel='bookmark')
-				if link and link.has_attr('href'):
-					href = link['href']
-					read_more_link = soup.new_tag('a', href=href)
-					read_more_link.string = '...read more'
-					div.append(read_more_link)
-					div.append(soup.new_tag('br'))
-					div.append(soup.new_tag('br'))
-					div.append(soup.new_tag('br'))
-
-		# Find all article tags with class "post"
 		articles = soup.find_all('article', class_='post')
 
 		for article in articles:
-			# Find the entry-meta div
+			# Extract title
+			header = article.find('header', class_='entry-header')
+			title_text = ''
+			title_href = ''
+			if header:
+				title_b = header.find('b')
+				if title_b:
+					title_text = title_b.get_text().strip()
+				link = header.find('a', rel='bookmark')
+				if link and link.has_attr('href'):
+					title_href = link['href']
+
+			# Extract author and date
 			entry_meta = article.find('div', class_='entry-meta')
-			
+			author_name = ''
+			date_text = ''
 			if entry_meta:
-				# Extract the date
 				date_span = entry_meta.find('span', class_='entry-date')
-				date = date_span.a.text if date_span and date_span.a else ''
-				
-				# Extract the author name and URL
+				date_text = date_span.a.text if date_span and date_span.a else ''
 				author_link = entry_meta.find('a', rel='author')
 				if author_link:
 					author_name = author_link.text
-					author_url = author_link['href']
-					
-					# Create the new string
-					new_meta = f'By <a href="{author_url}">{author_name}</a> | {date}<br><br>'
-					
-					# Replace the content of entry-meta
-					entry_meta.clear()
-					entry_meta.append(BeautifulSoup(new_meta, 'html.parser'))
-		
-		# Find all div elements with class "entry-meta"
-		entry_meta_divs = soup.find_all('div', class_='entry-meta')
 
-		# Unwrap each div, keeping its contents in place
-		for div in entry_meta_divs:
-			div.unwrap()
+			# Extract summary
+			entry_content = article.find('div', class_='entry-content')
+			summary = ''
+			if entry_content:
+				p_tags = entry_content.find_all('p')
+				for p in p_tags:
+					summary += p.get_text() + ' '
+				summary = summary.strip()
+				if len(summary) > 200:
+					last_space = summary[:201].rfind(' ')
+					summary = summary[:last_space + 1]
+
+			# Build definition list
+			dl = soup.new_tag('dl')
+
+			dt = soup.new_tag('dt')
+			if title_href:
+				a = soup.new_tag('a', href=title_href)
+				b = soup.new_tag('b')
+				b.string = title_text
+				a.append(b)
+				dt.append(a)
+			else:
+				b = soup.new_tag('b')
+				b.string = title_text
+				dt.append(b)
+			dt.append(f", {author_name}, {date_text}" if author_name else '')
+			dl.append(dt)
+
+			dd = soup.new_tag('dd')
+			dd.string = summary
+			if title_href:
+				read_more = soup.new_tag('a', href=title_href)
+				read_more.string = '...read more'
+				dd.append(read_more)
+			dl.append(dd)
+
+			article.replace_with(dl)
 
 	# Find all headers with class 'entry-header'
 	headers = soup.find_all('header', class_='entry-header')
