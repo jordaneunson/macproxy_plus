@@ -12,9 +12,26 @@ def process_html(content, url):
 	# Parse the HTML and remove specific tags
 	soup = BeautifulSoup(content, 'html.parser')
 
-	# Remove divs with class="featured-slides"
+	# Extract featured slides before removing them — we'll inject them into the listing later
+	featured_posts = []
 	featured_slides_divs = soup.find_all('div', class_='featured-slides')
 	for div in featured_slides_divs:
+		for a in div.find_all('a', href=True):
+			h1 = a.find('h1', class_='featured-slides-title')
+			if h1:
+				title = h1.get_text().strip()
+				href = a['href']
+				# Get summary text (everything after h1, before read-more)
+				summary = ''
+				for child in a.children:
+					if child.name != 'h1' and child.name != 'div' and hasattr(child, 'get_text'):
+						summary += child.get_text().strip() + ' '
+					elif isinstance(child, str):
+						summary += child.strip() + ' '
+				summary = summary.replace('\u2026read more', '').strip()
+				if summary.endswith('\u2026'):
+					summary = summary[:-1].strip()
+				featured_posts.append({'title': title, 'href': href, 'summary': summary})
 		div.decompose()
 
 	# Remove <a> tags with class="skip-link"
@@ -412,6 +429,32 @@ fresh hacks every day                 /___/
 	is_listing = ('hackaday.com/blog/' in url or 'hackaday.com/author/' in url or 
 		'hackaday.com/page/' in url or parsed.path in ('', '/', '/blog'))
 	if is_listing:
+		# Inject featured posts at the top of the body
+		if featured_posts:
+			body_tag = soup.find('body')
+			# Find insertion point — after the ascii art header
+			pre_tag = soup.find('pre')
+			insert_after = pre_tag if pre_tag else body_tag
+			for fp in reversed(featured_posts):
+				p = soup.new_tag('p')
+				a = soup.new_tag('a', href=fp['href'])
+				b = soup.new_tag('b')
+				b.string = fp['title']
+				a.append(b)
+				p.append(a)
+				p.append(soup.new_tag('br'))
+				if fp['summary']:
+					font = soup.new_tag('font', size="2")
+					font.append(fp['summary'])
+					read_more = soup.new_tag('a', href=fp['href'])
+					read_more.string = '...read more'
+					font.append(read_more)
+					p.append(font)
+				if insert_after == pre_tag:
+					pre_tag.insert_after(p)
+				else:
+					body_tag.insert(0, p)
+
 		articles = soup.find_all('article', class_='post')
 
 		for article in articles:
