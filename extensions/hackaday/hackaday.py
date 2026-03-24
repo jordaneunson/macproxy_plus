@@ -638,8 +638,44 @@ fresh hacks every day                 /___/
 	for element in soup(text=lambda text: isinstance(text, str) and not text.strip()):
 		element.extract()
 
-	# Convert problem characters and return
+	# Convert problem characters to ASCII-safe equivalents for classic Mac browsers
 	updated_html = str(soup)
+	char_map = {
+		'\u2018': "'",     # left single quote
+		'\u2019': "'",     # right single quote
+		'\u201C': '"',     # left double quote
+		'\u201D': '"',     # right double quote
+		'\u2013': '-',     # en dash
+		'\u2014': '--',    # em dash
+		'\u2026': '...',   # ellipsis
+		'\u00A0': ' ',     # non-breaking space
+		'\u2032': "'",     # prime
+		'\u2033': '"',     # double prime
+		'\u00AB': '<<',    # left guillemet
+		'\u00BB': '>>',    # right guillemet
+		'\u2022': '*',     # bullet
+		'\u00B7': '*',     # middle dot
+		'\u2010': '-',     # hyphen
+		'\u2011': '-',     # non-breaking hyphen
+		'\u2012': '-',     # figure dash
+		'\u2015': '--',    # horizontal bar
+		'\u2212': '-',     # minus sign
+		'\u00D7': 'x',     # multiplication sign
+		'\u00F7': '/',     # division sign
+		'\u2190': '<-',    # left arrow
+		'\u2192': '->',    # right arrow
+		'\u2264': '<=',    # less than or equal
+		'\u2265': '>=',    # greater than or equal
+		'\u00A9': '(c)',   # copyright
+		'\u00AE': '(R)',   # registered
+		'\u2122': '(TM)',  # trademark
+		'\u00BC': '1/4',   # quarter
+		'\u00BD': '1/2',   # half
+		'\u00BE': '3/4',   # three quarters
+		'\u00B0': ' deg',  # degree
+	}
+	for char, replacement in char_map.items():
+		updated_html = updated_html.replace(char, replacement)
 	return updated_html
 
 def handle_get(req):
