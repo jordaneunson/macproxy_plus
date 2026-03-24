@@ -472,13 +472,29 @@ main() {
   echo -e "  ${DIM}We'll get you on the vintage superhighway in just a moment.${RESET}"
   echo ""
 
-  # Copy config.py.example → config.py if not already there
-  if [[ ! -f "config.py" ]]; then
-    cp config.py.example config.py
-    print_ok "Created config.py from config.py.example"
-  else
-    print_warn "config.py already exists — will overwrite with your selections."
+  # Detect re-run: if config.py already exists, ask what they want to do
+  if [[ -f "config.py" ]]; then
+    print_ok "Existing installation detected."
+    echo ""
+    echo -e "  ${BOLD}What would you like to do?${RESET}"
+    echo -e "    ${BOLD}1)${RESET} Reconfigure extensions & API keys"
+    echo -e "    ${BOLD}2)${RESET} Just rebuild & restart (keep current config)"
+    echo ""
+    read -rp "  Choice [1/2]: " rerun_choice
+
+    if [[ "$rerun_choice" == "2" ]]; then
+      launch_docker
+      print_success
+      exit 0
+    fi
+
+    # Choice 1 (or anything else) — fall through to full setup
+    print_ok "Let's reconfigure."
   fi
+
+  # Copy config.py.example → config.py as a base
+  cp config.py.example config.py
+  print_ok "Created config.py from config.py.example"
 
   # Extension selection menu
   run_extension_menu
