@@ -56,7 +56,7 @@ def process_comments(comments_area, parent_element, new_soup, depth=0):
 		author_b = new_soup.new_tag('b')
 		author_b.string = author
 		header.append(author_b)
-		header.string = f"{author_b} | {points} points | {time_passed}"
+		header.append(f" | {points} points | {time_passed}")
 		comment_div.append(header)
 
 		# Comment body
@@ -257,6 +257,7 @@ def process_content(content, url):
 					font.append(new_soup.new_tag('br'))
 					
 					li.append(font)
+					li.append(new_soup.new_tag('hr'))
 					ul.append(li)
 
 		# Add navigation buttons
