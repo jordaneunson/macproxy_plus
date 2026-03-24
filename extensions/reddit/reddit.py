@@ -29,10 +29,19 @@ def handle_request(request):
 	except requests.RequestException as e:
 		return Response(f"An error occurred: {str(e)}", status=500)
 
-def process_comments(comments_area, parent_element, new_soup, depth=0):
+def process_comments(comments_area, parent_element, new_soup, depth=0, max_top=None, max_depth=None):
+	count = 0
 	for comment in comments_area.find_all('div', class_='thing', recursive=False):
 		if 'comment' not in comment.get('class', []):
 			continue  # Skip if it's not a comment
+		if max_top is not None and depth == 0 and count >= max_top:
+			more_p = new_soup.new_tag('p')
+			more_p.string = f"[{len(comments_area.find_all('div', class_='thing', recursive=False)) - max_top} more comments not shown]"
+			parent_element.append(more_p)
+			break
+		if max_depth is not None and depth >= max_depth:
+			return
+		count += 1
 
 		comment_div = new_soup.new_tag('div')
 		if depth > 0:
@@ -76,7 +85,7 @@ def process_comments(comments_area, parent_element, new_soup, depth=0):
 		if child_area:
 			child_comments = child_area.find('div', class_='sitetable listing')
 			if child_comments:
-				process_comments(child_comments, comment_div, new_soup, depth + 1)
+				process_comments(child_comments, comment_div, new_soup, depth + 1, max_top=max_top, max_depth=max_depth)
 
 def process_content(content, url):
 	soup = BeautifulSoup(content, 'html.parser')
@@ -203,12 +212,14 @@ def process_content(content, url):
 		body.append(new_soup.new_tag('br'))
 		body.append(new_soup.new_tag('hr'))
 
-		# Add comments
+		# Add comments (limited to keep load times sane)
+		MAX_TOP_COMMENTS = 10
+		MAX_REPLY_DEPTH = 3
 		comments_area = soup.find('div', class_='sitetable nestedlisting')
 		if comments_area:
 			comments_div = new_soup.new_tag('div')
 			body.append(comments_div)
-			process_comments(comments_area, comments_div, new_soup)
+			process_comments(comments_area, comments_div, new_soup, depth=0, max_top=MAX_TOP_COMMENTS, max_depth=MAX_REPLY_DEPTH)
 	else:
 		ul = new_soup.new_tag('ul')
 		body.append(ul)
