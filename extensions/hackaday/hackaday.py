@@ -456,24 +456,27 @@ fresh hacks every day                 /___/
 			pre_tag = soup.find('pre')
 			insert_after = pre_tag if pre_tag else body_tag
 			for fp in reversed(featured_posts):
-				p = soup.new_tag('p')
+				dl = soup.new_tag('dl')
+				dt = soup.new_tag('dt')
 				a = soup.new_tag('a', href=fp['href'])
 				b = soup.new_tag('b')
 				b.string = fp['title']
 				a.append(b)
-				p.append(a)
-				p.append(soup.new_tag('br'))
+				dt.append(a)
+				dl.append(dt)
 				if fp['summary']:
+					dd = soup.new_tag('dd')
 					font = soup.new_tag('font', size="2")
 					font.append(fp['summary'])
 					read_more = soup.new_tag('a', href=fp['href'])
 					read_more.string = '...read more'
 					font.append(read_more)
-					p.append(font)
+					dd.append(font)
+					dl.append(dd)
 				if insert_after == pre_tag:
-					pre_tag.insert_after(p)
+					pre_tag.insert_after(dl)
 				else:
-					body_tag.insert(0, p)
+					body_tag.insert(0, dl)
 
 		articles = soup.find_all('article', class_='post')
 
@@ -676,6 +679,16 @@ fresh hacks every day                 /___/
 	}
 	for char, replacement in char_map.items():
 		updated_html = updated_html.replace(char, replacement)
+
+	# Also catch any remaining non-ASCII and replace with ?
+	cleaned = []
+	for ch in updated_html:
+		if ord(ch) < 128:
+			cleaned.append(ch)
+		else:
+			cleaned.append('?')
+	updated_html = ''.join(cleaned)
+
 	return updated_html
 
 def handle_get(req):
