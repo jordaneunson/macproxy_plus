@@ -1,110 +1,94 @@
-## MacProxy Plus
+# MacProxy Plus
+
 An extensible HTTP proxy that connects early computers to the Internet.
 
-This fork of <a href="https://github.com/rdmark/macproxy">MacProxy</a> adds support for ```extensions```, which intercept requests for specific domains to serve simplified HTML interfaces, making it possible to browse the modern web from vintage hardware. Though originally designed for compatibility with early Macintoshes, MacProxy Plus should work to get many other vintage machines online.
-
-### Demonstration Video (on YouTube)
+### Watch it in action
 
 <a href="https://youtu.be/f1v1gWLHcOk" target="_blank">
   <img src="./readme_images/youtube_thumbnail.jpg" alt="Teaching an Old Mac New Tricks" width="400">
 </a>
 
-### Extensions
+MacProxy Plus lets vintage browsers surf the modern web by sitting between your old machine and the Internet. It strips out incompatible HTML/CSS, converts images to formats your retro hardware can actually display, and provides purpose-built extensions for popular sites — so your 1991 Mac can browse Reddit, chat with an AI, or check the weather.
 
-Each extension has its own folder within the `extensions` directory. Extensions can be individually enabled or disabled via a `config.py` file in the root directory.
+> **This is a fork of [hunterirving/macproxy_plus](https://github.com/hunterirving/macproxy_plus)** — a fantastic project by Hunter Irving. All the clever bits originated there. This fork adds Docker-based setup and a few extra extensions.
 
-To enable extensions:
+---
 
-1. In the root directory, rename ```config.py.example``` to ```config.py``` :
+## Getting Started
 
-	```shell
-	mv config.py.example config.py
-	```
+You need exactly two things: **Docker Desktop** and a terminal.
 
-2. In ```config.py```, enable/disable extensions by uncommenting/commenting lines in the ```ENABLED_EXTENSIONS``` list:
+### 1. Install Docker Desktop
 
-	```python
-	ENABLED_EXTENSIONS = [
-		#disabled_extension,
-		"enabled_extension"
-		]
-	```
+→ [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
 
-### Starting MacProxy Plus
+### 2. Run the setup script
 
-On Unix-like systems (such as Linux or macOS), run the ```start_macproxy.sh``` script. It will create a Python virtual environment, install the required Python packages, and make the proxy server available on your local network.
-
-```shell
-./start_macproxy.sh
+**One-liner (recommended):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/jordaneunson/macproxy_plus/main/setup.sh | bash
 ```
 
-On Windows, run the analogous PowerShell script, ```start_macproxy.ps1```:
-
-```powershell
-.\start_macproxy.ps1
+**Or clone first, then run:**
+```bash
+git clone https://github.com/jordaneunson/macproxy_plus
+cd macproxy_plus
+./setup.sh
 ```
 
-### Connecting to MacProxy Plus from your Vintage Machine
-To use MacProxy Plus, you'll need to configure your vintage browser or operating system to connect to the proxy server running on your host machine. The specific steps will vary depending on your browser and OS, but if your system lets you set a proxy server, it should work.
+### 3. That's it!
 
-If you're using a BlueSCSI to get a vintage Mac online, <a href="https://bluescsi.com/docs/WiFi-DaynaPORT">this guide</a> should help with the initial Internet setup.
-<br><br>
+The script will walk you through picking your extensions, ask for any API keys you need, and launch the proxy automatically. No Python, no pip, no virtualenvs — Docker handles everything.
+
+---
+
+## Connecting Your Vintage Machine
+
+Once MacProxy Plus is running, point your vintage browser at it:
+
+| Setting | Value |
+|---|---|
+| **HTTP Proxy** | IP address of the computer running MacProxy Plus |
+| **Port** | `5001` |
+
+Both machines need to be on the same local network. Find your host machine's local IP with `ipconfig getifaddr en0` (macOS) or `hostname -I` (Linux).
+
 ![Configuring proxy settings in MacWeb 2.0c+](readme_images/proxy_settings.gif)
-<br>*Example: Configuring proxy settings in <a href="https://github.com/hunterirving/macweb-2.0c-plus">MacWeb 2.0c+</a>*
+*Example: Configuring proxy settings in [MacWeb 2.0c+](https://github.com/hunterirving/macweb-2.0c-plus)*
 
-### Example Extension: ChatGPT
+---
 
-A ChatGPT extension is provided as an example. This extension serves a simple web interface that lets users interact with OpenAI's GPT models.
+## Available Extensions
 
-To enable the ChatGPT extension, open ```config.py```, uncomment the ```chatgpt``` line in the ```ENABLED_EXTENSIONS``` list, and replace ```YOUR_OPENAI_API_KEY_HERE``` with your actual OpenAI API key.
+The setup script lets you pick and choose which extensions to enable. Here's what's available:
 
-```python
-open_ai_api_key = "YOUR_OPENAI_API_KEY_HERE"
+| Extension | Description |
+|---|---|
+| **chatgpt** | Chat with OpenAI's GPT models *(requires OpenAI API key)* |
+| **claude** | Anthropic's Claude AI assistant *(requires Anthropic API key)* |
+| **gemini** | Google's Gemini AI assistant *(requires Gemini API key)* |
+| **hackaday** | Pared-down, text-only Hackaday — articles, comments, and search |
+| **hacksburg** | Local hackerspace portal |
+| **hunterirving** | Personal page extension |
+| **jordaneunson** | Personal page extension |
+| **kagi** | Privacy-respecting search *(requires Kagi session token)* |
+| **kimi** | Moonshot AI assistant *(requires Kimi API key)* |
+| **mistral** | Mistral AI chat *(requires Mistral API key)* |
+| **notyoutube** | A legally distinct parody of YouTube — encodes video via [MacFlim](https://www.macflim.com/macflim2/) |
+| **npr** | Text-only NPR news articles |
+| **reddit** | Browse subreddits with dithered black-and-white images |
+| **waybackmachine** | Browse the web as it existed on any date back to 1996 |
+| **weather** | US weather forecast by ZIP code |
+| **websimulator** | AI-generated imagined websites for URLs that don't exist *(requires Anthropic API key)* |
+| **wiby** | Handcrafted personal webpage search engine |
+| **wikipedia** | Browse 6M+ encyclopedia articles with clickable links and search |
 
-ENABLED_EXTENSIONS = [
-	"chatgpt"
-]
-```
+---
 
-Once enabled, Macproxy will reroute requests to ```http://chatgpt.com``` to this inteface.
-<br><br>
-<img src="readme_images/macintosh_plus.jpg">
+## Advanced Usage
 
-### Other Extensions
+For manual configuration, development setup, Docker-free installation, Windows instructions, preset support, and more — see **[ORIGINAL_README.md](./ORIGINAL_README.md)**.
 
-#### Claude (Anthropic)
-For the discerning LLM connoisseur.
+---
 
-#### Weather
-Get the forecast for any zip code in the US.
-
-#### Wikipedia
-Read any of over 6 million encyclopedia articles - complete with clickable links and search function.
-
-#### Reddit
-Browse any subreddit or the Reddit homepage, with support for nested comments and downloadable images... in dithered black and white.
-
-#### WayBack Machine
-Enter any date between January 1st, 1996 and today, then browse the web as it existed at that point in time. Includes full download support for images and other files backed up by the Internet Archive.
-
-#### Web Simulator
-Type a URL that doesn't exist into the address bar, and Anthropic's Claude 3.5 Sonnet will interpret the domain and any query parameters to generate an imagined version of that page on the fly. Each HTTP request is serialized and sent to the AI, along with the full HTML of the last 3 pages you visited, allowing you to explore a vast, interconnected, alternate reality Internet where the only limit is your imagination.
-
-#### (not) YouTube
-A legally distinct parody of YouTube, which uses the fantastic homebrew application <a href="https://www.macflim.com/macflim2/">MacFlim</a> (created by Fred Stark) to encode video files as a series of dithered black and white frames.
-
-#### Hackaday
-A pared-down, text-only version of hackaday.com, complete with articles, comments, and search functionality.
-
-#### npr.org
-Serves articles from the text-only version of the site (```text.npr.org```) and transforms relative urls into absolute urls for compatibility with MacWeb 2.0.
-
-#### wiby.me
-Browse Wiby's collection of personal, handmade webpages (fixes an issue where clicking "surprise me..." would not redirect users to their final destination).
-
-### Future Work
-- more extensions for more sites
-- presets targeting specific vintage machines/browsers
-- wiki with how-to guides for different machines
-
-Happy Surfing 😎
+*Happy Surfing 😎*
