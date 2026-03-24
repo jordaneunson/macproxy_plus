@@ -237,7 +237,6 @@ def process_content(content, url):
 					dl = new_soup.new_tag('dl')
 					
 					dt = new_soup.new_tag('dt')
-					dt.append(BeautifulSoup("&nbsp;&nbsp;&nbsp;", "html.parser"))
 					dt.append(title_a)
 					dl.append(dt)
 					
