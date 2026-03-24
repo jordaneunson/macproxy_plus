@@ -221,9 +221,6 @@ def process_content(content, url):
 			body.append(comments_div)
 			process_comments(comments_area, comments_div, new_soup, depth=0, max_top=MAX_TOP_COMMENTS, max_depth=MAX_REPLY_DEPTH)
 	else:
-		ul = new_soup.new_tag('ul')
-		body.append(ul)
-		
 		site_table = soup.find('div', id='siteTable')
 		if site_table:
 			for thing in site_table.find_all('div', id=lambda x: x and x.startswith('thing_'), recursive=False):
@@ -237,11 +234,9 @@ def process_content(content, url):
 					if permalink:
 						title_a['href'] = f"http://reddit.com{permalink}"
 					
-					li = new_soup.new_tag('li')
-					li.append(title_a)
-					
-					li.append(new_soup.new_tag('br'))
-					li.append(new_soup.new_tag('br'))
+					p = new_soup.new_tag('p')
+					p.append(title_a)
+					p.append(new_soup.new_tag('br'))
 					
 					font = new_soup.new_tag('font', size="2")
 					author = thing.get('data-author', 'Unknown')
@@ -265,11 +260,8 @@ def process_content(content, url):
 					points = thing.get('data-score', 'Unknown')
 					font.append(f" | {points} points")
 					
-					font.append(new_soup.new_tag('br'))
-					font.append(new_soup.new_tag('br'))
-					
-					li.append(font)
-					ul.append(li)
+					p.append(font)
+					body.append(p)
 
 		# Add navigation buttons
 		nav_buttons = soup.find('div', class_='nav-buttons')
