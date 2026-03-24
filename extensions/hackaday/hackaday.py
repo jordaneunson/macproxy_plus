@@ -443,10 +443,18 @@ fresh hacks every day                 /___/
 	if is_front_page:
 		for article in soup.find_all('article', class_='post'):
 			article.decompose()
-		# Also remove paging nav from front page
+		# Remove paging nav
 		paging_nav = soup.find('nav', class_='navigation paging-navigation')
 		if paging_nav:
 			paging_nav.decompose()
+		# Remove "From The Blog" and everything after it
+		from_blog = soup.find('aside', class_='widget_recent_entries')
+		if from_blog:
+			from_blog.decompose()
+		# Remove recent comments widget too
+		recent_comments = soup.find('aside', class_='widget_recent_comments')
+		if recent_comments:
+			recent_comments.decompose()
 
 	if is_front_page or is_listing:
 		# Inject featured posts at the top of the body
