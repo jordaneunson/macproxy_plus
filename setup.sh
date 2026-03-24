@@ -6,6 +6,13 @@
 
 set -e
 
+# ── Ensure stdin is the terminal (needed for curl | bash) ─────────────────────
+# When piped via curl, stdin is the script itself — not the keyboard.
+# Redirect stdin from /dev/tty so interactive reads work.
+if [[ ! -t 0 ]]; then
+  exec < /dev/tty
+fi
+
 # ── Colors & ASCII flair ──────────────────────────────────────────────────────
 BOLD='\033[1m'
 DIM='\033[2m'
