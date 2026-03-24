@@ -234,14 +234,13 @@ def process_content(content, url):
 					if permalink:
 						title_a['href'] = f"http://reddit.com{permalink}"
 					
-					p = new_soup.new_tag('p')
-					ul = new_soup.new_tag('ul')
+					dl = new_soup.new_tag('dl')
 					
-					li_title = new_soup.new_tag('li')
-					li_title.append(title_a)
-					ul.append(li_title)
+					dt = new_soup.new_tag('dt')
+					dt.append(title_a)
+					dl.append(dt)
 					
-					li_stats = new_soup.new_tag('li')
+					dd = new_soup.new_tag('dd')
 					font = new_soup.new_tag('font', size="2")
 					author = thing.get('data-author', 'Unknown')
 					font.append(f"{author} | ")
@@ -264,11 +263,10 @@ def process_content(content, url):
 					points = thing.get('data-score', 'Unknown')
 					font.append(f" | {points} points")
 					
-					li_stats.append(font)
-					ul.append(li_stats)
+					dd.append(font)
+					dl.append(dd)
 					
-					p.append(ul)
-					body.append(p)
+					body.append(dl)
 
 		# Add navigation buttons
 		nav_buttons = soup.find('div', class_='nav-buttons')
