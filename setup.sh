@@ -94,6 +94,15 @@ ensure_in_repo() {
     return
   fi
 
+  # If a macproxy_plus directory already exists, pull latest and use it
+  if [[ -d "macproxy_plus" && -f "macproxy_plus/proxy.py" ]]; then
+    print_step "Found existing macproxy_plus directory, pulling latest..."
+    cd macproxy_plus
+    git pull origin master 2>/dev/null || true
+    print_ok "Updated existing installation."
+    return
+  fi
+
   print_step "Cloning MacProxy Plus..."
   if ! command -v git &>/dev/null; then
     print_err "Git is not installed. Please install Git and try again."
