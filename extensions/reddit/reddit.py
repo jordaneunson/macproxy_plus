@@ -235,9 +235,13 @@ def process_content(content, url):
 						title_a['href'] = f"http://reddit.com{permalink}"
 					
 					p = new_soup.new_tag('p')
-					p.append(title_a)
-					p.append(new_soup.new_tag('br'))
+					ul = new_soup.new_tag('ul')
 					
+					li_title = new_soup.new_tag('li')
+					li_title.append(title_a)
+					ul.append(li_title)
+					
+					li_stats = new_soup.new_tag('li')
 					font = new_soup.new_tag('font', size="2")
 					author = thing.get('data-author', 'Unknown')
 					font.append(f"{author} | ")
@@ -260,7 +264,10 @@ def process_content(content, url):
 					points = thing.get('data-score', 'Unknown')
 					font.append(f" | {points} points")
 					
-					p.append(font)
+					li_stats.append(font)
+					ul.append(li_stats)
+					
+					p.append(ul)
 					body.append(p)
 
 		# Add navigation buttons
