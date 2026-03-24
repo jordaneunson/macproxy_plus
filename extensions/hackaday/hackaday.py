@@ -34,6 +34,15 @@ def process_html(content, url):
 				featured_posts.append({'title': title, 'href': href, 'summary': summary})
 		div.decompose()
 
+	# Remove "Blog" links from navigation
+	for a in soup.find_all('a', href=True):
+		if a.get_text().strip() == 'Blog' and 'hackaday.com/blog/' in a['href']:
+			li = a.find_parent('li')
+			if li:
+				li.decompose()
+			else:
+				a.decompose()
+
 	# Remove <a> tags with class="skip-link"
 	skip_links = soup.find_all('a', class_='skip-link')
 	for link in skip_links:
