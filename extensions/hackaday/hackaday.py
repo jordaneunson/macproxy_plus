@@ -408,7 +408,10 @@ fresh hacks every day                 /___/
 	add_br_after_comments(soup)
 
 	# Process blog listings and search results into definition lists
-	if 'hackaday.com/blog/' in url or 'hackaday.com/author/' in url or 'hackaday.com/page/' in url:
+	parsed = urlparse(url)
+	is_listing = ('hackaday.com/blog/' in url or 'hackaday.com/author/' in url or 
+		'hackaday.com/page/' in url or parsed.path in ('', '/', '/blog'))
+	if is_listing:
 		articles = soup.find_all('article', class_='post')
 
 		for article in articles:
