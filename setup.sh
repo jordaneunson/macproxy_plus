@@ -6,16 +6,6 @@
 
 set -e
 
-# ── Handle curl | bash ────────────────────────────────────────────────────────
-# When piped, bash reads the script from stdin. We need stdin free for user input.
-# Download ourselves to a temp file and re-exec with stdin connected to terminal.
-if [[ ! -t 0 ]]; then
-  _SETUP_TMPFILE="$(mktemp "${TMPDIR:-/tmp}/macproxy_setup.XXXXXX.sh")"
-  # We're being piped — but bash hasn't read the whole file yet.
-  # Use curl to download the full script fresh.
-  curl -fsSL "https://raw.githubusercontent.com/jordaneunson/macproxy_plus/master/setup.sh" > "$_SETUP_TMPFILE"
-  exec bash "$_SETUP_TMPFILE"
-fi
 
 # ── Colors & ASCII flair ──────────────────────────────────────────────────────
 BOLD='\033[1m'

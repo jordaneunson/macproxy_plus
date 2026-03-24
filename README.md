@@ -26,7 +26,7 @@ You need exactly two things: **Docker Desktop** and a terminal.
 
 **One-liner (recommended):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jordaneunson/macproxy_plus/master/setup.sh | bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/jordaneunson/macproxy_plus/master/setup.sh)"
 ```
 
 **Or clone first, then run:**
