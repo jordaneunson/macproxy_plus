@@ -262,11 +262,6 @@ def process_content(content, url):
 					
 					p.append(font)
 					body.append(p)
-					spacer = new_soup.new_tag('dir')
-					spacer_li = new_soup.new_tag('li')
-					spacer_li.append("\u00a0")
-					spacer.append(spacer_li)
-					body.append(spacer)
 
 		# Add navigation buttons
 		nav_buttons = soup.find('div', class_='nav-buttons')
