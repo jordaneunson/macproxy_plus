@@ -6,18 +6,25 @@
 
 set -e
 
-# ── Ensure stdin is the terminal (needed for curl | bash) ─────────────────────
-# When piped via curl, stdin is the script itself — not the keyboard.
-# Redirect stdin from /dev/tty so interactive reads work.
+# ── Terminal input (needed for curl | bash) ───────────────────────────────────
+# When piped via curl, stdin is the script — not the keyboard.
+# Open /dev/tty on fd 3 and read user input from there.
 if [[ ! -t 0 ]]; then
   if [[ -e /dev/tty ]]; then
-    exec < /dev/tty || { echo "Error: Cannot open /dev/tty for interactive input."; echo "Try: git clone https://github.com/jordaneunson/macproxy_plus && cd macproxy_plus && ./setup.sh"; exit 1; }
+    exec 3</dev/tty
   else
     echo "Error: No terminal available for interactive input."
     echo "Try: git clone https://github.com/jordaneunson/macproxy_plus && cd macproxy_plus && ./setup.sh"
     exit 1
   fi
+else
+  exec 3<&0
 fi
+
+# Wrapper: read from terminal (fd 3) instead of stdin
+tty_read() {
+  read "$@" <&3
+}
 
 # ── Colors & ASCII flair ──────────────────────────────────────────────────────
 BOLD='\033[1m'
@@ -110,7 +117,7 @@ ensure_in_repo() {
   local default_dir="$HOME/Documents/macproxy_plus"
 
   echo ""
-  read -rp "  Install location [~/Documents/macproxy_plus]: " install_dir
+  tty_read -rp "  Install location [~/Documents/macproxy_plus]: " install_dir
   install_dir="${install_dir:-$default_dir}"
 
   # Expand ~ if they typed it
@@ -247,7 +254,7 @@ run_extension_menu() {
     echo -e "${DIM}  ────────────────────────────────────────────────────────────${RESET}"
     echo -e "  ${BOLD}a)${RESET} Enable all   ${BOLD}n)${RESET} Disable all   ${BOLD}s)${RESET} Save & continue"
     echo ""
-    read -rp "  Toggle #: " choice
+    tty_read -rp "  Toggle #: " choice
 
     if [[ "$choice" == "s" || "$choice" == "S" ]]; then
       break
@@ -367,10 +374,10 @@ collect_credentials() {
 
     while true; do
       if [[ "$key" == *TOKEN* || "$key" == *KEY* ]]; then
-        read -rsp "  $prompt: " value
+        tty_read -rsp "  $prompt: " value
         echo ""
       else
-        read -rp "  $prompt: " value
+        tty_read -rp "  $prompt: " value
       fi
 
       if [[ -n "$value" ]]; then
@@ -504,7 +511,7 @@ main() {
     echo -e "    ${BOLD}1)${RESET} Reconfigure extensions & API keys"
     echo -e "    ${BOLD}2)${RESET} Just rebuild & restart (keep current config)"
     echo ""
-    read -rp "  Choice [1/2]: " rerun_choice
+    tty_read -rp "  Choice [1/2]: " rerun_choice
 
     if [[ "$rerun_choice" == "2" ]]; then
       launch_docker
