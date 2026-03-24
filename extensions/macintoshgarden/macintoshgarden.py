@@ -1,0 +1,591 @@
+import requests
+from bs4 import BeautifulSoup
+from flask import Response, stream_with_context
+import urllib.parse
+import re
+
+DOMAIN = "macintoshgarden.org"
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
+}
+
+BASE_URL = "https://www.macintoshgarden.org"
+
+CHAR_MAP = {
+    '\u2018': "'", '\u2019': "'", '\u201C': '"', '\u201D': '"',
+    '\u2013': '-', '\u2014': '--', '\u2026': '...', '\u00A0': ' ',
+    '\u2032': "'", '\u2033': '"', '\u00AB': '<<', '\u00BB': '>>',
+    '\u2022': '*', '\u00B7': '*', '\u2010': '-', '\u2011': '-',
+    '\u2012': '-', '\u2015': '--', '\u2212': '-', '\u00D7': 'x',
+    '\u00F7': '/', '\u2190': '<-', '\u2192': '->', '\u2264': '<=',
+    '\u2265': '>=', '\u00A9': '(c)', '\u00AE': '(R)', '\u2122': '(TM)',
+    '\u00BC': '1/4', '\u00BD': '1/2', '\u00BE': '3/4', '\u00B0': ' deg',
+}
+
+
+def clean_text(text):
+    for char, replacement in CHAR_MAP.items():
+        text = text.replace(char, replacement)
+    cleaned = []
+    for ch in text:
+        if ord(ch) < 128:
+            cleaned.append(ch)
+        else:
+            cleaned.append('?')
+    return ''.join(cleaned)
+
+
+def make_page(title, body_html):
+    html = '<html>\n<head><title>' + clean_text(title) + '</title></head>\n<body>\n' + search_bar() + '\n<hr>\n' + body_html + '\n<hr>\n' + footer() + '\n</body>\n</html>'
+    return clean_text(html), 200
+
+
+def search_bar():
+    return '''<center>
+<b><a href="http://macintoshgarden.org/">Macintosh Garden</a></b>
+&nbsp;|&nbsp;<a href="http://macintoshgarden.org/apps">Apps</a>
+&nbsp;|&nbsp;<a href="http://macintoshgarden.org/games">Games</a>
+<br>
+<form action="http://macintoshgarden.org/search" method="get">
+<input type="text" name="q" size="30">
+<input type="submit" value="Search">
+</form>
+</center>'''
+
+
+def footer():
+    return '<center><font size="2">Macintosh Garden - Classic Mac Software Archive</font></center>'
+
+
+def error_page(message, status=500):
+    body = '<p><b>Error:</b> ' + message + '</p><p><a href="http://macintoshgarden.org/">Return to homepage</a></p>'
+    html = '<html>\n<head><title>Error - Macintosh Garden</title></head>\n<body>\n' + search_bar() + '\n<hr>\n' + body + '\n</body>\n</html>'
+    return clean_text(html), status
+
+
+def fetch(url):
+    resp = requests.get(url, headers=HEADERS, timeout=15, allow_redirects=True)
+    resp.raise_for_status()
+    return resp
+
+
+def handle_request(request):
+    path = request.path
+    query_string = request.query_string.decode('utf-8', errors='replace')
+
+    # Route: search
+    if path == '/search' or path.startswith('/search/node'):
+        q = request.args.get('q', '')
+        if not q:
+            m = re.match(r'^/search/node/(.+)$', path)
+            if m:
+                q = urllib.parse.unquote_plus(m.group(1))
+        if not q:
+            return handle_homepage()
+        return handle_search(q)
+
+    # Route: homepage
+    if path == '/' or path == '':
+        return handle_homepage()
+
+    # Route: apps or games listing (with optional letter/page)
+    if re.match(r'^/(apps|games)(/.*)?$', path):
+        return handle_listing(path)
+
+    # Route: download proxy
+    if path.startswith('/download/'):
+        return handle_download(request)
+
+    # Fallback: try to proxy the page as a detail page
+    return handle_detail(path)
+
+
+# ---------------------------------------------------------------------------
+# Homepage
+# ---------------------------------------------------------------------------
+
+def handle_homepage():
+    try:
+        resp = fetch(BASE_URL + "/")
+        soup = BeautifulSoup(resp.content, 'html.parser')
+    except Exception as e:
+        return error_page(str(e))
+
+    body = []
+    body.append('<center><h2>Macintosh Garden</h2>')
+    body.append('<p>Classic Macintosh Software Archive</p>')
+    body.append('<table width="80%" border="1" cellpadding="4">')
+    body.append('<tr>')
+    body.append('<td align="center"><b><a href="http://macintoshgarden.org/apps">Applications</a></b><br>Productivity, utilities, and more</td>')
+    body.append('<td align="center"><b><a href="http://macintoshgarden.org/games">Games</a></b><br>Classic Mac games</td>')
+    body.append('</tr>')
+    body.append('</table></center>')
+    body.append('<br>')
+
+    items = []
+    for node in soup.select('div.views-row, div.node-teaser, article'):
+        title_tag = node.find(['h2', 'h3', 'h4'])
+        if not title_tag:
+            continue
+        a_tag = title_tag.find('a')
+        if not a_tag:
+            continue
+        title = a_tag.get_text(strip=True)
+        href = a_tag.get('href', '')
+        if not href or href == '#':
+            continue
+        if not href.startswith('http'):
+            href = 'http://macintoshgarden.org' + href
+        else:
+            href = href.replace('https://', 'http://')
+
+        snippet = ''
+        body_div = node.find('div', class_=re.compile(r'field-body|body|teaser|summary'))
+        if body_div:
+            snippet = body_div.get_text(strip=True)[:120]
+            if len(snippet) == 120:
+                snippet += '...'
+
+        items.append((title, href, snippet))
+
+    if items:
+        body.append('<b>Recent Additions</b>')
+        body.append('<hr>')
+        body.append('<dl>')
+        for title, href, snippet in items[:20]:
+            body.append('<dt><a href="' + href + '">' + title + '</a></dt>')
+            if snippet:
+                body.append('<dd><font size="2">' + snippet + '</font></dd>')
+        body.append('</dl>')
+    else:
+        body.append('<p>Browse the archive using the links above.</p>')
+
+    return make_page("Macintosh Garden", '\n'.join(body))
+
+
+# ---------------------------------------------------------------------------
+# Listing (Apps / Games)
+# ---------------------------------------------------------------------------
+
+def handle_listing(path):
+    category = 'apps' if path.startswith('/apps') else 'games'
+    category_label = 'Applications' if category == 'apps' else 'Games'
+    target = BASE_URL + path
+
+    try:
+        resp = fetch(target)
+        soup = BeautifulSoup(resp.content, 'html.parser')
+    except Exception as e:
+        return error_page(str(e))
+
+    body = []
+    body.append('<h2>' + category_label + '</h2>')
+
+    # --- Alphabet navigation ---
+    alpha_links = []
+    for a in soup.find_all('a', href=True):
+        href = a['href']
+        text = a.get_text(strip=True)
+        if re.match(r'^[0-9A-Za-z]$', text) and '/' + category in href:
+            alpha_links.append((text.upper(), href))
+
+    seen = set()
+    unique_alpha = []
+    for label, href in alpha_links:
+        if label not in seen:
+            seen.add(label)
+            unique_alpha.append((label, href))
+
+    if unique_alpha:
+        body.append('<p>')
+        for label, href in unique_alpha:
+            h = href if href.startswith('http') else 'http://macintoshgarden.org' + href
+            h = h.replace('https://', 'http://')
+            body.append('<a href="' + h + '">[' + label + ']</a> ')
+        body.append('</p>')
+        body.append('<hr>')
+
+    # --- Item listing ---
+    items = []
+    for node in soup.select('div.views-row, li.views-row, div.node-teaser'):
+        a_tag = node.find('a', href=True)
+        if not a_tag:
+            continue
+        title = a_tag.get_text(strip=True)
+        href = a_tag['href']
+        if not href or href == '#':
+            continue
+        if not href.startswith('http'):
+            href = 'http://macintoshgarden.org' + href
+        else:
+            href = href.replace('https://', 'http://')
+
+        if href.rstrip('/') in ('http://macintoshgarden.org/apps', 'http://macintoshgarden.org/games'):
+            continue
+
+        meta = ''
+        meta_div = node.find('div', class_=re.compile(r'field-created|field-author|date|submitted'))
+        if meta_div:
+            meta = meta_div.get_text(strip=True)[:60]
+
+        items.append((title, href, meta))
+
+    if items:
+        body.append('<dl>')
+        for title, href, meta in items:
+            body.append('<dt><a href="' + href + '">' + title + '</a></dt>')
+            if meta:
+                body.append('<dd><font size="2">' + meta + '</font></dd>')
+        body.append('</dl>')
+    else:
+        body.append('<p>No items found. Try browsing by letter above.</p>')
+
+    # --- Pagination ---
+    pager = soup.find('ul', class_=re.compile(r'pager'))
+    if pager:
+        body.append('<p align="center">')
+        for li in pager.find_all('li'):
+            a = li.find('a')
+            if a:
+                href = a['href']
+                if not href.startswith('http'):
+                    href = 'http://macintoshgarden.org' + href
+                else:
+                    href = href.replace('https://', 'http://')
+                label = a.get_text(strip=True) or li.get_text(strip=True)
+                body.append('<a href="' + href + '">[' + label + ']</a> ')
+            else:
+                label = li.get_text(strip=True)
+                if label:
+                    body.append('<b>[' + label + ']</b> ')
+        body.append('</p>')
+
+    return make_page(category_label + ' - Macintosh Garden', '\n'.join(body))
+
+
+# ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
+
+def handle_search(query):
+    encoded = urllib.parse.quote(query)
+    target = BASE_URL + "/search/node/" + encoded
+
+    try:
+        resp = fetch(target)
+        soup = BeautifulSoup(resp.content, 'html.parser')
+    except Exception as e:
+        return error_page(str(e))
+
+    body = []
+    body.append('<h2>Search: ' + query + '</h2>')
+    body.append('<hr>')
+
+    results = []
+
+    for li in soup.select('ol.search-results li, li.search-result'):
+        a_tag = li.find('a', href=True)
+        if not a_tag:
+            continue
+        title = a_tag.get_text(strip=True)
+        href = a_tag['href']
+        if not href.startswith('http'):
+            href = 'http://macintoshgarden.org' + href
+        else:
+            href = href.replace('https://', 'http://')
+
+        snippet = ''
+        snippet_div = li.find('div', class_=re.compile(r'search-snippet|snippet'))
+        if not snippet_div:
+            snippet_div = li.find('p')
+        if snippet_div:
+            snippet = snippet_div.get_text(strip=True)[:150]
+            if len(snippet) == 150:
+                snippet += '...'
+
+        category = ''
+        type_span = li.find('span', class_=re.compile(r'type|category'))
+        if type_span:
+            category = type_span.get_text(strip=True)
+
+        results.append((title, href, snippet, category))
+
+    if results:
+        body.append('<p><font size="2">' + str(len(results)) + ' result(s) found</font></p>')
+        body.append('<dl>')
+        for title, href, snippet, category in results:
+            cat_str = ' <font size="2">[' + category + ']</font>' if category else ''
+            body.append('<dt><a href="' + href + '">' + title + '</a>' + cat_str + '</dt>')
+            if snippet:
+                body.append('<dd><font size="2">' + snippet + '</font></dd>')
+        body.append('</dl>')
+    else:
+        body.append('<p>No results found for "' + query + '".</p>')
+        body.append('<p>Try browsing: <a href="http://macintoshgarden.org/apps">Apps</a> | <a href="http://macintoshgarden.org/games">Games</a></p>')
+
+    # Pagination
+    pager = soup.find('ul', class_=re.compile(r'pager'))
+    if pager:
+        body.append('<p align="center">')
+        for li in pager.find_all('li'):
+            a = li.find('a')
+            if a:
+                href = a['href']
+                if not href.startswith('http'):
+                    href = 'http://macintoshgarden.org' + href
+                else:
+                    href = href.replace('https://', 'http://')
+                label = a.get_text(strip=True) or li.get_text(strip=True)
+                body.append('<a href="' + href + '">[' + label + ']</a> ')
+            else:
+                label = li.get_text(strip=True)
+                if label:
+                    body.append('<b>[' + label + ']</b> ')
+        body.append('</p>')
+
+    return make_page('Search: ' + query + ' - Macintosh Garden', '\n'.join(body))
+
+
+# ---------------------------------------------------------------------------
+# Detail page
+# ---------------------------------------------------------------------------
+
+def handle_detail(path):
+    target = BASE_URL + path
+    try:
+        resp = fetch(target)
+        soup = BeautifulSoup(resp.content, 'html.parser')
+    except requests.HTTPError as e:
+        if e.response is not None and e.response.status_code == 404:
+            return error_page('Page not found.', 404)
+        return error_page(str(e))
+    except Exception as e:
+        return error_page(str(e))
+
+    body = []
+
+    # --- Title ---
+    page_title = ''
+    title_tag = soup.find('h1', class_=re.compile(r'title|page-title')) or soup.find('h1')
+    if title_tag:
+        page_title = title_tag.get_text(strip=True)
+
+    if not page_title:
+        title_el = soup.find('title')
+        page_title = title_el.get_text(strip=True) if title_el else 'Macintosh Garden'
+
+    body.append('<h2>' + page_title + '</h2>')
+    body.append('<hr>')
+
+    # --- Metadata table ---
+    meta_rows = []
+    for field in soup.select('div.field'):
+        label_el = field.find(class_=re.compile(r'field-label'))
+        value_el = field.find(class_=re.compile(r'field-item|field-items'))
+        if label_el and value_el:
+            label = label_el.get_text(strip=True).rstrip(':')
+            value = value_el.get_text(strip=True)
+            if label and value:
+                meta_rows.append((label, value))
+
+    compat_text = ''
+    for tag in soup.find_all(string=re.compile(r'68k|PPC|PowerPC', re.I)):
+        parent = tag.parent
+        if parent:
+            compat_text = parent.get_text(strip=True)[:100]
+            break
+
+    if meta_rows:
+        body.append('<table border="0" cellpadding="3">')
+        for label, value in meta_rows[:12]:
+            body.append('<tr><td><b>' + label + ':</b></td><td>' + value + '</td></tr>')
+        body.append('</table>')
+        body.append('<br>')
+
+    # --- Description ---
+    desc_div = (
+        soup.find('div', class_=re.compile(r'field-name-body|body|description'))
+        or soup.find('div', class_='content')
+    )
+    if desc_div:
+        for tag in desc_div.find_all(['script', 'style', 'img']):
+            tag.decompose()
+        desc_text = desc_div.get_text(separator=' ', strip=True)[:800]
+        if len(desc_text) == 800:
+            desc_text += '...'
+        body.append('<b>Description:</b>')
+        body.append('<blockquote>' + desc_text + '</blockquote>')
+
+    if compat_text:
+        body.append('<p><b>Compatibility:</b> ' + compat_text + '</p>')
+
+    body.append('<hr>')
+
+    # --- Download links ---
+    body.append('<b>Downloads:</b>')
+    body.append('<br>')
+
+    download_links = _extract_downloads(soup, path)
+
+    if download_links:
+        body.append('<table border="1" cellpadding="4" width="100%">')
+        body.append('<tr><th>File</th><th>Size</th><th>Mirror</th></tr>')
+        for dl in download_links:
+            fname = dl['filename']
+            size = dl['size'] or ''
+            mirror = dl['mirror']
+            proxy_href = dl['proxy_url']
+            body.append('<tr>')
+            body.append('<td><a href="' + proxy_href + '"><b>' + fname + '</b></a></td>')
+            body.append('<td>' + size + '</td>')
+            body.append('<td>' + mirror + '</td>')
+            body.append('</tr>')
+        body.append('</table>')
+        body.append('<br>')
+        body.append('<font size="2">Click a filename to download via MacProxy.</font>')
+    else:
+        body.append('<p>No download links found on this page.</p>')
+
+    return make_page(page_title + ' - Macintosh Garden', '\n'.join(body))
+
+
+def _extract_downloads(soup, path):
+    """Extract and normalize download links from a detail page."""
+    downloads = []
+    seen = set()
+
+    MIRROR_PATTERNS = [
+        r'macintoshgarden\.org\.se',
+        r'macintoshgarden\.r-fx\.ca',
+        r'files\.macintoshgarden\.org',
+        r'macintoshgarden\.org\.de',
+        r'ftp\.macintoshgarden',
+        r'www\.macintoshgarden\.org/files',
+        r'macintoshgarden\.org/files',
+    ]
+    mirror_re = re.compile('|'.join(MIRROR_PATTERNS), re.I)
+    file_ext_re = re.compile(r'\.(sit|hqx|bin|zip|img|dsk|sea|cpt|tar|gz|dmg|toast|iso|7z)(\?.*)?$', re.I)
+
+    for a in soup.find_all('a', href=True):
+        href = a['href']
+        text = a.get_text(strip=True)
+
+        is_mirror = bool(mirror_re.search(href))
+        is_file = bool(file_ext_re.search(href))
+
+        if not (is_mirror or is_file):
+            continue
+
+        if href in seen:
+            continue
+        seen.add(href)
+
+        direct_url = href
+        if direct_url.startswith('//'):
+            direct_url = 'http:' + direct_url
+        elif direct_url.startswith('https://'):
+            direct_url = direct_url.replace('https://', 'http://', 1)
+        elif not direct_url.startswith('http://'):
+            direct_url = 'http://' + direct_url.lstrip('/')
+
+        mirror_label = 'Mirror'
+        if '.se' in href:
+            mirror_label = '.SE'
+        elif '.de' in href:
+            mirror_label = '.DE'
+        elif 'r-fx.ca' in href:
+            mirror_label = 'CA'
+        elif 'files.macintoshgarden.org' in href:
+            mirror_label = 'Main'
+
+        fname = href.split('/')[-1].split('?')[0] or text or 'download'
+
+        size = ''
+        td = a.find_parent('td')
+        if td:
+            next_td = td.find_next_sibling('td')
+            if next_td:
+                candidate = next_td.get_text(strip=True)
+                if re.match(r'^\d+', candidate):
+                    size = candidate
+
+        encoded = urllib.parse.quote(direct_url, safe='')
+        proxy_url = 'http://macintoshgarden.org/download/' + encoded
+
+        downloads.append({
+            'filename': fname,
+            'size': size,
+            'mirror': mirror_label,
+            'direct_url': direct_url,
+            'proxy_url': proxy_url,
+        })
+
+    return downloads
+
+
+# ---------------------------------------------------------------------------
+# Download proxy
+# ---------------------------------------------------------------------------
+
+def handle_download(request):
+    """Proxy the actual file download so a vintage Mac can grab it."""
+    path = request.path  # /download/<encoded_url>
+    encoded = path[len('/download/'):]
+
+    if not encoded:
+        return error_page('No download URL specified.', 400)
+
+    file_url = urllib.parse.unquote(encoded)
+
+    allowed = re.compile(
+        r'^https?://(www\.)?(macintoshgarden\.org|'
+        r'macintoshgarden\.org\.se|macintoshgarden\.r-fx\.ca|'
+        r'files\.macintoshgarden\.org|macintoshgarden\.org\.de|'
+        r'ftp\.macintoshgarden)',
+        re.I
+    )
+    if not allowed.match(file_url):
+        return error_page('Download source not allowed.', 403)
+
+    try:
+        dl_resp = requests.get(
+            file_url,
+            headers=HEADERS,
+            stream=True,
+            timeout=30,
+            allow_redirects=True
+        )
+        dl_resp.raise_for_status()
+
+        content_type = dl_resp.headers.get('Content-Type', 'application/octet-stream')
+        content_length = dl_resp.headers.get('Content-Length')
+
+        response_headers = {'Content-Type': content_type}
+        if content_length:
+            response_headers['Content-Length'] = content_length
+
+        cd = dl_resp.headers.get('Content-Disposition', '')
+        if cd:
+            response_headers['Content-Disposition'] = cd
+        else:
+            fname = file_url.split('/')[-1].split('?')[0]
+            if fname:
+                response_headers['Content-Disposition'] = 'attachment; filename="' + fname + '"'
+
+        def generate():
+            for chunk in dl_resp.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+
+        return Response(
+            stream_with_context(generate()),
+            status=dl_resp.status_code,
+            headers=response_headers
+        )
+
+    except requests.HTTPError as e:
+        code = e.response.status_code if e.response is not None else 500
+        return error_page('Download failed: ' + str(e), code)
+    except Exception as e:
+        return error_page('Download error: ' + str(e))
