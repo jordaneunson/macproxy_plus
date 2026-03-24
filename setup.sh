@@ -128,6 +128,12 @@ ALL_EXTENSIONS=(
   wikipedia
 )
 
+# Parallel array tracking enabled state (0=off, 1=on)
+EXT_ENABLED=()
+for _ext in "${ALL_EXTENSIONS[@]}"; do
+  EXT_ENABLED+=(0)
+done
+
 # Extensions that ship with nice descriptions for the menu
 ext_desc() {
   case "$1" in
@@ -183,12 +189,6 @@ ext_key_prompt() {
 
 # Interactive extension toggle menu
 run_extension_menu() {
-  # enabled[] tracks which are on (1) or off (0)
-  declare -A enabled
-  for ext in "${ALL_EXTENSIONS[@]}"; do
-    enabled[$ext]=0
-  done
-
   while true; do
     clear
     banner
@@ -196,16 +196,18 @@ run_extension_menu() {
     echo -e "${DIM}  Use the number to toggle an extension on/off. Press ${WHITE}s${DIM} when done.${RESET}"
     echo ""
 
-    local i=1
-    for ext in "${ALL_EXTENSIONS[@]}"; do
-      if [[ "${enabled[$ext]}" == "1" ]]; then
+    local i=0
+    while [ $i -lt ${#ALL_EXTENSIONS[@]} ]; do
+      local ext="${ALL_EXTENSIONS[$i]}"
+      local num=$((i + 1))
+      if [[ "${EXT_ENABLED[$i]}" == "1" ]]; then
         status="${GREEN}[ON] ${RESET}"
       else
         status="${DIM}[off]${RESET}"
       fi
-      printf "  ${BOLD}%2d)${RESET} %b %-12s %b%s%b\n" \
-        "$i" "$status" "$ext" "${DIM}" "$(ext_desc "$ext")" "${RESET}"
-      ((i++))
+      printf "  ${BOLD}%2d)${RESET} %b %-16s %b%s%b\n" \
+        "$num" "$status" "$ext" "${DIM}" "$(ext_desc "$ext")" "${RESET}"
+      i=$((i + 1))
     done
 
     echo ""
@@ -217,16 +219,23 @@ run_extension_menu() {
     if [[ "$choice" == "s" || "$choice" == "S" ]]; then
       break
     elif [[ "$choice" == "a" || "$choice" == "A" ]]; then
-      for ext in "${ALL_EXTENSIONS[@]}"; do enabled[$ext]=1; done
+      local j=0
+      while [ $j -lt ${#ALL_EXTENSIONS[@]} ]; do
+        EXT_ENABLED[$j]=1
+        j=$((j + 1))
+      done
     elif [[ "$choice" == "n" || "$choice" == "N" ]]; then
-      for ext in "${ALL_EXTENSIONS[@]}"; do enabled[$ext]=0; done
+      local j=0
+      while [ $j -lt ${#ALL_EXTENSIONS[@]} ]; do
+        EXT_ENABLED[$j]=0
+        j=$((j + 1))
+      done
     elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#ALL_EXTENSIONS[@]} )); then
       local idx=$((choice - 1))
-      local ext="${ALL_EXTENSIONS[$idx]}"
-      if [[ "${enabled[$ext]}" == "1" ]]; then
-        enabled[$ext]=0
+      if [[ "${EXT_ENABLED[$idx]}" == "1" ]]; then
+        EXT_ENABLED[$idx]=0
       else
-        enabled[$ext]=1
+        EXT_ENABLED[$idx]=1
       fi
     else
       print_warn "Unrecognized input, try again."
@@ -234,31 +243,89 @@ run_extension_menu() {
     fi
   done
 
-  # Export selected extensions for use outside the function
+  # Build selected extensions list
   SELECTED_EXTENSIONS=()
-  for ext in "${ALL_EXTENSIONS[@]}"; do
-    if [[ "${enabled[$ext]}" == "1" ]]; then
-      SELECTED_EXTENSIONS+=("$ext")
+  local i=0
+  while [ $i -lt ${#ALL_EXTENSIONS[@]} ]; do
+    if [[ "${EXT_ENABLED[$i]}" == "1" ]]; then
+      SELECTED_EXTENSIONS+=("${ALL_EXTENSIONS[$i]}")
     fi
+    i=$((i + 1))
   done
 }
 
 # ── Collect credentials ───────────────────────────────────────────────────────
+# Credential storage: parallel arrays (bash 3 compatible)
+CRED_KEYS=()
+CRED_VALS=()
+
+cred_set() {
+  local key="$1" val="$2"
+  local i=0
+  while [ $i -lt ${#CRED_KEYS[@]} ]; do
+    if [[ "${CRED_KEYS[$i]}" == "$key" ]]; then
+      CRED_VALS[$i]="$val"
+      return
+    fi
+    i=$((i + 1))
+  done
+  CRED_KEYS+=("$key")
+  CRED_VALS+=("$val")
+}
+
+cred_get() {
+  local key="$1"
+  local i=0
+  while [ $i -lt ${#CRED_KEYS[@]} ]; do
+    if [[ "${CRED_KEYS[$i]}" == "$key" ]]; then
+      echo "${CRED_VALS[$i]}"
+      return
+    fi
+    i=$((i + 1))
+  done
+  echo ""
+}
+
+cred_has() {
+  local key="$1"
+  local i=0
+  while [ $i -lt ${#CRED_KEYS[@]} ]; do
+    if [[ "${CRED_KEYS[$i]}" == "$key" ]]; then
+      return 0
+    fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
 collect_credentials() {
-  declare -gA CREDENTIALS
-
-  # Some extensions share a key (claude + websimulator both need ANTHROPIC_API_KEY)
-  # so we track which keys we've already asked for
-  declare -A asked
-
   echo ""
   print_step "Collecting API keys for enabled extensions..."
+
+  local needs_any=0
+  for ext in "${SELECTED_EXTENSIONS[@]}"; do
+    local key
+    key="$(ext_needs_key "$ext")"
+    if [[ -n "$key" ]]; then
+      needs_any=1
+      break
+    fi
+  done
+
+  if [[ "$needs_any" == "0" ]]; then
+    print_ok "None of your selected extensions need API keys. Nice and easy!"
+    return
+  fi
 
   for ext in "${SELECTED_EXTENSIONS[@]}"; do
     local key
     key="$(ext_needs_key "$ext")"
     [[ -z "$key" ]] && continue
-    [[ "${asked[$key]+set}" == "set" ]] && continue
+
+    # Skip if we already asked for this key (e.g. claude + websimulator both need ANTHROPIC_API_KEY)
+    if cred_has "$key"; then
+      continue
+    fi
 
     local prompt
     prompt="$(ext_key_prompt "$key")"
@@ -274,8 +341,7 @@ collect_credentials() {
       fi
 
       if [[ -n "$value" ]]; then
-        CREDENTIALS[$key]="$value"
-        asked[$key]=1
+        cred_set "$key" "$value"
         print_ok "Got it."
         break
       else
@@ -289,30 +355,30 @@ collect_credentials() {
 write_config() {
   print_step "Writing config.py..."
 
-  # Read the example file to preserve all settings below the extensions block
-  local example_content
-  example_content="$(cat config.py.example)"
-
-  # Build config.py header with credentials
+  # Build config.py
   local config=""
   config+="# config.py — generated by setup.sh\n"
   config+="# Edit this file to change extensions, API keys, or proxy settings.\n\n"
 
-  # Write out any credentials we collected
-  if [[ ${#CREDENTIALS[@]} -gt 0 ]]; then
-    for key in "${!CREDENTIALS[@]}"; do
-      local val="${CREDENTIALS[$key]}"
-      # Skip ZIP_CODE — it goes in the weather section below
-      [[ "$key" == "ZIP_CODE" ]] && continue
+  # Write out any credentials we collected (API keys first, then ZIP_CODE)
+  local i=0
+  while [ $i -lt ${#CRED_KEYS[@]} ]; do
+    local key="${CRED_KEYS[$i]}"
+    local val="${CRED_VALS[$i]}"
+    if [[ "$key" != "ZIP_CODE" ]]; then
       config+="$key = \"$val\"\n"
-    done
-    config+="\n"
-  fi
+    fi
+    i=$((i + 1))
+  done
 
   # ZIP_CODE
-  if [[ -n "${CREDENTIALS[ZIP_CODE]+set}" ]]; then
-    config+="ZIP_CODE = \"${CREDENTIALS[ZIP_CODE]}\"\n\n"
+  local zip_val
+  zip_val="$(cred_get ZIP_CODE)"
+  if [[ -n "$zip_val" ]]; then
+    config+="\nZIP_CODE = \"$zip_val\"\n"
   fi
+
+  config+="\n"
 
   # ENABLED_EXTENSIONS list
   config+="ENABLED_EXTENSIONS = [\n"
@@ -354,7 +420,8 @@ launch_docker() {
 # ── Success ───────────────────────────────────────────────────────────────────
 print_success() {
   local host_ip
-  host_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || ipconfig getifaddr en0 2>/dev/null || echo "YOUR_HOST_IP")"
+  # Try macOS method first, then Linux
+  host_ip="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_HOST_IP")"
 
   echo ""
   echo -e "${GREEN}${BOLD}"
@@ -362,7 +429,7 @@ print_success() {
   echo "  ║       MacProxy Plus is up and running!  🎉            ║"
   echo "  ╚═══════════════════════════════════════════════════════╝"
   echo -e "${RESET}"
-  echo -e "  ${BOLD}Proxy address:${RESET}  ${CYAN}0.0.0.0:5001${RESET}  (port 5001 on this machine)"
+  echo -e "  ${BOLD}Proxy address:${RESET}  ${CYAN}${host_ip}:5001${RESET}"
   echo ""
   echo -e "  ${BOLD}On your vintage machine:${RESET}"
   echo -e "    Open your browser's Network/Proxy settings and enter:"
@@ -376,6 +443,8 @@ print_success() {
   echo -e "    ${CYAN}$DOCKER_COMPOSE logs -f${RESET}       — watch live logs"
   echo -e "    ${CYAN}$DOCKER_COMPOSE down${RESET}          — stop the proxy"
   echo -e "    ${CYAN}$DOCKER_COMPOSE up -d --build${RESET} — restart / rebuild"
+  echo ""
+  echo -e "  ${DIM}To change extensions or keys later, just edit config.py and rebuild.${RESET}"
   echo ""
   echo -e "  ${DIM}Happy surfing, retronaut! 🖥️${RESET}"
   echo ""
