@@ -55,8 +55,10 @@ Both machines need to be on the same local network. Find your host machine's loc
 
 > **Using a 4MB 68k Mac (Plus, Classic, SE, etc.)?** You'll want [MacWeb 2.0c+](https://github.com/hunterirving/macweb-2.0c-plus) by Hunter Irving — it's a lightweight browser built specifically for these machines and works great with MacProxy Plus.
 
-![Configuring proxy settings in MacWeb 2.0c+](readme_images/proxy_settings.gif)
-*Example: Configuring proxy settings in [MacWeb 2.0c+](https://github.com/hunterirving/macweb-2.0c-plus)*
+<p align="center">
+  <img src="readme_images/proxy_settings.gif" alt="Configuring proxy settings in MacWeb 2.0c+" width="400"><br>
+  <em>Example: Configuring proxy settings in <a href="https://github.com/hunterirving/macweb-2.0c-plus">MacWeb 2.0c+</a></em>
+</p>
 
 ---
 
