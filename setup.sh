@@ -10,7 +10,13 @@ set -e
 # When piped via curl, stdin is the script itself — not the keyboard.
 # Redirect stdin from /dev/tty so interactive reads work.
 if [[ ! -t 0 ]]; then
-  exec < /dev/tty
+  if [[ -e /dev/tty ]]; then
+    exec < /dev/tty || { echo "Error: Cannot open /dev/tty for interactive input."; echo "Try: git clone https://github.com/jordaneunson/macproxy_plus && cd macproxy_plus && ./setup.sh"; exit 1; }
+  else
+    echo "Error: No terminal available for interactive input."
+    echo "Try: git clone https://github.com/jordaneunson/macproxy_plus && cd macproxy_plus && ./setup.sh"
+    exit 1
+  fi
 fi
 
 # ── Colors & ASCII flair ──────────────────────────────────────────────────────
