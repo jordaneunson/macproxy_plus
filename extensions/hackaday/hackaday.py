@@ -435,8 +435,19 @@ fresh hacks every day                 /___/
 
 	# Process blog listings and search results into definition lists
 	parsed = urlparse(url)
+	is_front_page = parsed.path in ('', '/', '/blog')
 	is_listing = ('hackaday.com/blog/' in url or 'hackaday.com/author/' in url or 
-		'hackaday.com/page/' in url or parsed.path in ('', '/', '/blog'))
+		'hackaday.com/page/' in url)
+
+	# Remove article content from front page — use /blog/ instead
+	if is_front_page:
+		for article in soup.find_all('article', class_='post'):
+			article.decompose()
+		# Also remove paging nav from front page
+		paging_nav = soup.find('nav', class_='navigation paging-navigation')
+		if paging_nav:
+			paging_nav.decompose()
+
 	if is_listing:
 		# Inject featured posts at the top of the body
 		if featured_posts:
