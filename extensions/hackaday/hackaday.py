@@ -447,32 +447,32 @@ fresh hacks every day                 /___/
 					last_space = summary[:201].rfind(' ')
 					summary = summary[:last_space + 1]
 
-			# Build definition list
-			dl = soup.new_tag('dl')
+			# Build post block
+			p = soup.new_tag('p')
 
-			dt = soup.new_tag('dt')
 			if title_href:
 				a = soup.new_tag('a', href=title_href)
 				b = soup.new_tag('b')
 				b.string = title_text
 				a.append(b)
-				dt.append(a)
+				p.append(a)
 			else:
 				b = soup.new_tag('b')
 				b.string = title_text
-				dt.append(b)
-			dt.append(f", {author_name}, {date_text}" if author_name else '')
-			dl.append(dt)
+				p.append(b)
+			if author_name:
+				p.append(f", {author_name}, {date_text}")
+			p.append(soup.new_tag('br'))
 
-			dd = soup.new_tag('dd')
-			dd.string = summary
+			font = soup.new_tag('font', size="2")
+			font.append(summary)
 			if title_href:
 				read_more = soup.new_tag('a', href=title_href)
 				read_more.string = '...read more'
-				dd.append(read_more)
-			dl.append(dd)
+				font.append(read_more)
+			p.append(font)
 
-			article.replace_with(dl)
+			article.replace_with(p)
 
 	# Find all headers with class 'entry-header'
 	headers = soup.find_all('header', class_='entry-header')
