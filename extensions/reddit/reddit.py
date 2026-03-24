@@ -297,4 +297,25 @@ def process_content(content, url):
 				new_next.string = 'next &gt;'
 				nav_right.append(new_next)
 
-	return str(new_soup), 200
+	updated_html = str(new_soup)
+
+	# ASCII substitution for classic Mac browsers
+	char_map = {
+		'\u2018': "'", '\u2019': "'", '\u201C': '"', '\u201D': '"',
+		'\u2013': '-', '\u2014': '--', '\u2026': '...', '\u00A0': ' ',
+		'\u2032': "'", '\u2033': '"', '\u00AB': '<<', '\u00BB': '>>',
+		'\u2022': '*', '\u00B7': '*', '\u2010': '-', '\u2011': '-',
+		'\u2012': '-', '\u2015': '--', '\u2212': '-', '\u00D7': 'x',
+		'\u00F7': '/', '\u2190': '<-', '\u2192': '->', '\u2264': '<=',
+		'\u2265': '>=', '\u00A9': '(c)', '\u00AE': '(R)', '\u2122': '(TM)',
+		'\u00BC': '1/4', '\u00BD': '1/2', '\u00BE': '3/4', '\u00B0': ' deg',
+	}
+	for char, replacement in char_map.items():
+		updated_html = updated_html.replace(char, replacement)
+	cleaned = []
+	for ch in updated_html:
+		if ord(ch) < 128:
+			cleaned.append(ch)
+		else:
+			cleaned.append('?')
+	return ''.join(cleaned), 200
