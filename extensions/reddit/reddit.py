@@ -241,6 +241,7 @@ def process_content(content, url):
 					li.append(title_a)
 					
 					li.append(new_soup.new_tag('br'))
+					li.append(new_soup.new_tag('br'))
 					
 					font = new_soup.new_tag('font', size="2")
 					author = thing.get('data-author', 'Unknown')
