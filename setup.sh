@@ -104,7 +104,7 @@ ensure_in_repo() {
   local default_dir="$HOME/Documents/macproxy_plus"
 
   echo ""
-  read -rp "  Install location [${default_dir}]: " install_dir
+  read -rp "  Install location [~/Documents/macproxy_plus]: " install_dir
   install_dir="${install_dir:-$default_dir}"
 
   # Expand ~ if they typed it
