@@ -448,7 +448,7 @@ fresh hacks every day                 /___/
 		if paging_nav:
 			paging_nav.decompose()
 
-	if is_listing:
+	if is_front_page or is_listing:
 		# Inject featured posts at the top of the body
 		if featured_posts:
 			body_tag = soup.find('body')
