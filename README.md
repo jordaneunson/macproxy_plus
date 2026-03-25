@@ -4,12 +4,10 @@ An extensible HTTP proxy that connects early computers to the Internet.
 
 ### Watch it in action
 
-<p align="center">
-  <a href="https://youtu.be/f1v1gWLHcOk" target="_blank">
-    <img src="./readme_images/youtube_thumbnail.jpg" alt="Teaching an Old Mac New Tricks" width="400">
-  </a><br>
-  <em>Image by <a href="https://github.com/hunterirving">Hunter Irving</a></em>
-</p>
+<a href="https://youtu.be/f1v1gWLHcOk" target="_blank">
+  <img src="./readme_images/youtube_thumbnail.jpg" alt="Teaching an Old Mac New Tricks" width="400">
+</a><br>
+<em>Image by <a href="https://github.com/hunterirving">Hunter Irving</a></em>
 
 MacProxy Plus lets vintage browsers surf the modern web by sitting between your old machine and the Internet. It strips out incompatible HTML/CSS, converts images to formats your retro hardware can actually display, and provides purpose-built extensions for popular sites — so your 1991 Mac can browse Reddit, chat with an AI, or check the weather.
 
