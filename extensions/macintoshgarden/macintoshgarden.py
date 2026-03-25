@@ -626,7 +626,8 @@ def _register_download(url, detail_path):
     _download_counter += 1
     fname = url.split('/')[-1].split('?')[0] or 'download.bin'
     # Snapshot current session cookies so the download can reuse them
-    cookies = dict(_http_session.cookies)
+    # Use items() to avoid CookieConflictError with duplicate cookie names
+    cookies = {c.name: c.value for c in _http_session.cookies}
     _download_registry[_download_counter] = (now, url, detail_path, fname, cookies)
     print("[macintoshgarden] Registered download #%d: %s (from %s) cookies=%s" % (_download_counter, fname, detail_path, list(cookies.keys())))
     return 'http://macintoshgarden.org/download/' + str(_download_counter) + '/' + fname
