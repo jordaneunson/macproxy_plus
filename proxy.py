@@ -278,6 +278,18 @@ def handle_default_request():
 	
 	try:
 		resp = send_request(url, headers)
+
+		# Pass redirects back to the client so the browser updates its URL
+		# (important for relative link resolution)
+		if resp.status_code in (301, 302, 303, 307, 308) and 'Location' in resp.headers:
+			location = resp.headers['Location'].replace('https://', 'http://')
+			print(f"Redirect {resp.status_code} -> {location}")
+			return Response(
+				'',
+				status=resp.status_code,
+				headers={'Location': location}
+			)
+
 		content = resp.content
 		status_code = resp.status_code
 		headers = dict(resp.headers)
@@ -308,7 +320,7 @@ def send_request(url, headers):
 	if request.method == "POST":
 		return session.post(url, data=request.form, headers=headers, allow_redirects=True)
 	else:
-		return session.get(url, params=request.args, headers=headers)
+		return session.get(url, params=request.args, headers=headers, allow_redirects=False)
 
 @app.after_request
 def apply_caching(resp):
