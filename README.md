@@ -10,7 +10,7 @@ An extensible HTTP proxy that connects early computers to the Internet.
 
 MacProxy Plus lets vintage browsers surf the modern web by sitting between your old machine and the Internet. It strips out incompatible HTML/CSS, converts images to formats your retro hardware can actually display, and provides purpose-built extensions for popular sites — so your 1991 Mac can browse Reddit, chat with an AI, or check the weather.
 
-> **This is a fork of [hunterirving/macproxy_plus](https://github.com/hunterirving/macproxy_plus)** — a fantastic project by Hunter Irving. All the clever bits originated there. This fork adds Docker-based setup and a few extra extensions.
+> **This is a fork of [hunterirving/macproxy_plus](https://github.com/hunterirving/macproxy_plus)** — a fantastic project by Hunter Irving. All the clever bits originated there. This fork adds Docker-based setup and a few extra extensions. Hero image by [Hunter Irving](https://github.com/hunterirving).
 
 ---
 
@@ -59,6 +59,10 @@ Both machines need to be on the same local network. Find your host machine's loc
   <img src="readme_images/proxy_settings.gif" alt="Configuring proxy settings in MacWeb 2.0c+" width="400"><br>
   <em>Example: Configuring proxy settings in <a href="https://github.com/hunterirving/macweb-2.0c-plus">MacWeb 2.0c+</a></em>
 </p>
+
+### MacWeb Hotlist (Bookmarks)
+
+A pre-built hotlist file (`MacWeb_Hotlist.hqx`) is included with bookmarks for all the extensions. To use it, decode the BinHex file and place the resulting `MacWeb Hotlist` file in your MacWeb 2.0c folder on the vintage Mac.
 
 ---
 
