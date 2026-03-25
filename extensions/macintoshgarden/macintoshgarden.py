@@ -582,7 +582,7 @@ def _extract_downloads(soup, path):
             'filename': fname,
             'size': size,
             'mirror': mirror_label,
-            'direct_url': direct_url,
+            'direct_url': real_url,
             'proxy_url': proxy_url,
         })
 

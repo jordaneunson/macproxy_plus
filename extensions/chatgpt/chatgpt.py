@@ -39,17 +39,21 @@ HTML_TEMPLATE = """
 	<title>ChatGPT</title>
 </head>
 <body>
-	<form method="post" action="/">
-		<select id="model" name="model">
-			<!-- Top of the line -->
-			<option value="gpt-5.4" {{ 'selected' if selected_model == 'gpt-5.4' else '' }}>GPT-5.4 (Flagship)</option>
-			<!-- Mid-tier -->
-			<option value="gpt-4.1" {{ 'selected' if selected_model == 'gpt-4.1' else '' }}>GPT-4.1 (Mid-tier)</option>
-			<option value="gpt-5-mini" {{ 'selected' if selected_model == 'gpt-5-mini' else '' }}>GPT-5 Mini (Balanced)</option>
-			<!-- Budget / fast -->
-			<option value="gpt-5-nano" {{ 'selected' if selected_model == 'gpt-5-nano' else '' }}>GPT-5 Nano (Fast &amp; cheap)</option>
-			<option value="gpt-4.1-mini" {{ 'selected' if selected_model == 'gpt-4.1-mini' else '' }}>GPT-4.1 Mini (Budget)</option>
-		</select>
+	<table width="100%"><tr>
+		<td align="left">
+			<form method="post" action="/">
+			<select id="model" name="model">
+				<option value="gpt-5.4" {{ 'selected' if selected_model == 'gpt-5.4' else '' }}>GPT-5.4 (Flagship)</option>
+				<option value="gpt-4.1" {{ 'selected' if selected_model == 'gpt-4.1' else '' }}>GPT-4.1 (Mid-tier)</option>
+				<option value="gpt-5-mini" {{ 'selected' if selected_model == 'gpt-5-mini' else '' }}>GPT-5 Mini (Balanced)</option>
+				<option value="gpt-5-nano" {{ 'selected' if selected_model == 'gpt-5-nano' else '' }}>GPT-5 Nano (Fast &amp; cheap)</option>
+				<option value="gpt-4.1-mini" {{ 'selected' if selected_model == 'gpt-4.1-mini' else '' }}>GPT-4.1 Mini (Budget)</option>
+			</select>
+		</td>
+		<td align="right">
+			<form method="get" action="/"><input type="hidden" name="action" value="new"><input type="submit" value="New Chat"></form>
+		</td>
+	</tr></table>
 		<input type="text" size="63" name="command" required autocomplete="off">
 		<input type="submit" value="Submit">
 	</form>
@@ -64,6 +68,9 @@ def handle_request(req):
 	if req.method == 'POST':
 		content, status_code = handle_post(req)
 	elif req.method == 'GET':
+		if req.args.get('action') == 'new':
+			messages.clear()
+			return Response(chat_interface(req), status=200, content_type='text/html')
 		content, status_code = handle_get(req)
 	else:
 		content, status_code = "Not Found", 404

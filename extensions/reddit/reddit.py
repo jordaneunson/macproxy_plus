@@ -8,9 +8,61 @@ import hashlib
 import os
 import shutil
 import mimetypes
+import time
+import urllib.parse
 
 DOMAIN = "reddit.com"
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
+
+# --- Caches ---
+# Page cache: URL -> (timestamp, response_content_bytes)
+_page_cache = {}
+_PAGE_CACHE_TTL = 180  # 3 minutes
+_MAX_PAGE_CACHE = 50
+
+# Image cache: image_url -> (timestamp, dithered_img_tag_html)
+_image_cache = {}
+_IMAGE_CACHE_TTL = 900  # 15 minutes
+_MAX_IMAGE_CACHE = 200
+
+
+def _cache_get(cache, key, ttl):
+	"""Get from cache if not expired."""
+	if key in cache:
+		ts, val = cache[key]
+		if time.time() - ts < ttl:
+			return val
+		del cache[key]
+	return None
+
+
+def _cache_put(cache, key, val, ttl, max_entries):
+	"""Put into cache, evicting expired/oldest if full."""
+	now = time.time()
+	if len(cache) >= max_entries:
+		expired = [k for k, (t, _) in cache.items() if now - t > ttl]
+		for k in expired:
+			del cache[k]
+		if len(cache) >= max_entries:
+			oldest = sorted(cache, key=lambda k: cache[k][0])
+			for k in oldest[:len(oldest) // 2]:
+				del cache[k]
+	cache[key] = (now, val)
+
+
+def _fetch_reddit(url):
+	"""Fetch a Reddit page with caching."""
+	# Strip cpage param for cache key since it's our own pagination
+	cache_key = url.split('?')[0] if '?cpage=' in url else url
+	cached = _cache_get(_page_cache, cache_key, _PAGE_CACHE_TTL)
+	if cached is not None:
+		return cached
+	headers = {'User-Agent': USER_AGENT}
+	resp = requests.get(url, headers=headers, allow_redirects=True, timeout=10)
+	resp.raise_for_status()
+	_cache_put(_page_cache, cache_key, resp.content, _PAGE_CACHE_TTL, _MAX_PAGE_CACHE)
+	return resp.content
+
 
 def handle_request(request):
 	if request.method != 'GET':
@@ -29,29 +81,15 @@ def handle_request(request):
 		url = url.replace("reddit.com", "old.reddit.com", 1)
 	
 	try:
-		headers = {'User-Agent': USER_AGENT} if USER_AGENT else {}
-		resp = requests.get(url, headers=headers, allow_redirects=True, timeout=10)
-		resp.raise_for_status()
-		return process_content(resp.content, url)
+		content = _fetch_reddit(url)
+		return process_content(content, url, request)
 	except requests.RequestException as e:
 		return Response(f"An error occurred: {str(e)}", status=500)
 
 
 def handle_outbound(target_url):
 	"""Fetch an external page linked from Reddit, strip images and heavy content."""
-	import urllib.parse
-
-	# ASCII substitution map (same as process_content)
-	char_map = {
-		'\u2018': "'", '\u2019': "'", '\u201C': '"', '\u201D': '"',
-		'\u2013': '-', '\u2014': '--', '\u2026': '...', '\u00A0': ' ',
-		'\u2032': "'", '\u2033': '"', '\u00AB': '<<', '\u00BB': '>>',
-		'\u2022': '*', '\u00B7': '*', '\u2010': '-', '\u2011': '-',
-		'\u2012': '-', '\u2015': '--', '\u2212': '-', '\u00D7': 'x',
-		'\u00F7': '/', '\u2190': '<-', '\u2192': '->', '\u2264': '<=',
-		'\u2265': '>=', '\u00A9': '(c)', '\u00AE': '(R)', '\u2122': '(TM)',
-		'\u00BC': '1/4', '\u00BD': '1/2', '\u00BE': '3/4', '\u00B0': ' deg',
-	}
+	char_map = _get_char_map()
 
 	try:
 		headers = {'User-Agent': USER_AGENT}
@@ -62,22 +100,18 @@ def handle_outbound(target_url):
 
 	soup = BeautifulSoup(resp.content, 'html.parser')
 
-	# Extract page title
 	page_title = soup.title.string.strip() if soup.title and soup.title.string else target_url
 
-	# Remove all images, scripts, styles, iframes, video, audio, svg, canvas, noscript
 	for tag in soup.find_all(['img', 'script', 'style', 'iframe', 'video', 'audio',
 							  'svg', 'canvas', 'noscript', 'picture', 'source', 'figure']):
 		tag.decompose()
 
-	# Remove all style attributes
 	for tag in soup.find_all(True):
 		if tag.has_attr('style'):
 			del tag['style']
 		if tag.has_attr('class'):
 			del tag['class']
 
-	# Try to find the article body
 	article = (
 		soup.find('article') or
 		soup.find('div', {'role': 'article'}) or
@@ -90,14 +124,11 @@ def handle_outbound(target_url):
 	if article:
 		body_text = article.get_text(separator='\n', strip=True)
 	else:
-		# Fallback: grab the whole body
 		body_tag = soup.find('body')
 		body_text = body_tag.get_text(separator='\n', strip=True) if body_tag else ''
 
-	# Clean up excessive blank lines
 	lines = [line.strip() for line in body_text.split('\n')]
 	lines = [line for line in lines if line]
-	# Truncate very long articles
 	if len(lines) > 200:
 		lines = lines[:200]
 		lines.append('[Article truncated]')
@@ -115,7 +146,23 @@ def handle_outbound(target_url):
 		f'</body></html>'
 	)
 
-	# ASCII cleanup
+	return _ascii_clean(html, char_map), 200
+
+
+def _get_char_map():
+	return {
+		'\u2018': "'", '\u2019': "'", '\u201C': '"', '\u201D': '"',
+		'\u2013': '-', '\u2014': '--', '\u2026': '...', '\u00A0': ' ',
+		'\u2032': "'", '\u2033': '"', '\u00AB': '<<', '\u00BB': '>>',
+		'\u2022': '*', '\u00B7': '*', '\u2010': '-', '\u2011': '-',
+		'\u2012': '-', '\u2015': '--', '\u2212': '-', '\u00D7': 'x',
+		'\u00F7': '/', '\u2190': '<-', '\u2192': '->', '\u2264': '<=',
+		'\u2265': '>=', '\u00A9': '(c)', '\u00AE': '(R)', '\u2122': '(TM)',
+		'\u00BC': '1/4', '\u00BD': '1/2', '\u00BE': '3/4', '\u00B0': ' deg',
+	}
+
+
+def _ascii_clean(html, char_map):
 	for char, replacement in char_map.items():
 		html = html.replace(char, replacement)
 	cleaned = []
@@ -124,21 +171,14 @@ def handle_outbound(target_url):
 			cleaned.append(ch)
 		else:
 			cleaned.append('?')
-	return ''.join(cleaned), 200
+	return ''.join(cleaned)
 
-def process_comments(comments_area, parent_element, new_soup, depth=0, max_top=None, max_depth=None):
-	count = 0
-	for comment in comments_area.find_all('div', class_='thing', recursive=False):
-		if 'comment' not in comment.get('class', []):
-			continue  # Skip if it's not a comment
-		if max_top is not None and depth == 0 and count >= max_top:
-			more_p = new_soup.new_tag('p')
-			more_p.string = f"[{len(comments_area.find_all('div', class_='thing', recursive=False)) - max_top} more comments not shown]"
-			parent_element.append(more_p)
-			break
+
+def process_comments(comments, parent_element, new_soup, depth=0, max_depth=None):
+	"""Process a list of comment elements directly (no re-parsing)."""
+	for comment in comments:
 		if max_depth is not None and depth >= max_depth:
 			return
-		count += 1
 
 		comment_div = new_soup.new_tag('div')
 		if depth > 0:
@@ -174,7 +214,6 @@ def process_comments(comments_area, parent_element, new_soup, depth=0, max_top=N
 				body_p.string = body_text
 				comment_div.append(body_p)
 
-		# Extra space between comments
 		comment_div.append(new_soup.new_tag('br'))
 
 		# Process child comments
@@ -182,9 +221,11 @@ def process_comments(comments_area, parent_element, new_soup, depth=0, max_top=N
 		if child_area:
 			child_comments = child_area.find('div', class_='sitetable listing')
 			if child_comments:
-				process_comments(child_comments, comment_div, new_soup, depth + 1, max_top=max_top, max_depth=max_depth)
+				child_list = [c for c in child_comments.find_all('div', class_='thing', recursive=False) if 'comment' in c.get('class', [])]
+				process_comments(child_list, comment_div, new_soup, depth + 1, max_depth=max_depth)
 
-def process_content(content, url):
+
+def process_content(content, url, request=None):
 	soup = BeautifulSoup(content, 'html.parser')
 	
 	new_soup = BeautifulSoup('', 'html.parser')
@@ -265,10 +306,8 @@ def process_content(content, url):
 					dl = new_soup.new_tag('dl')
 					dt = new_soup.new_tag('dt')
 					original_href = title_a.get('href', '')
-					# If link is external (not a reddit self post), make it clickable via outbound proxy
 					title_font = new_soup.new_tag('font', size="4")
 					if original_href and 'reddit.com' not in original_href:
-						import urllib.parse
 						outbound_url = 'http://reddit.com/outbound?url=' + urllib.parse.quote(original_href, safe='')
 						a_tag = new_soup.new_tag('a', href=outbound_url)
 						b = new_soup.new_tag('b')
@@ -312,31 +351,88 @@ def process_content(content, url):
 								img_src = enclosing_a['href']
 								new_img = new_soup.new_tag('img', src=img_src, width="50", height="40")
 								d.append(new_img)
-								d.append(" ")  # Add space between images
+								d.append(" ")
 				
 					# Add post content if it exists
 					usertext_body = thing.find('div', class_='usertext-body')
 					if usertext_body:
 						md_content = usertext_body.find('div', class_='md')
 						if md_content:
+							# Rewrite external links to go through outbound proxy
+							for a in md_content.find_all('a', href=True):
+								href = a['href']
+								if href and 'reddit.com' not in href and href.startswith(('http://', 'https://')):
+									a['href'] = 'http://reddit.com/outbound?url=' + urllib.parse.quote(href, safe='')
 							d.append(new_soup.new_tag('br'))
 							d.append(md_content)
 					
 					body.append(d)
 
-		# Add a <br> before the <hr> that divides comments and the original post
 		body.append(new_soup.new_tag('br'))
 		body.append(new_soup.new_tag('br'))
 		body.append(new_soup.new_tag('hr'))
 
-		# Add comments (limited to keep load times sane)
-		MAX_TOP_COMMENTS = 10
+		# Add comments (paginated to keep load times sane)
+		COMMENTS_PER_PAGE = 3
 		MAX_REPLY_DEPTH = 3
 		comments_area = soup.find('div', class_='sitetable nestedlisting')
 		if comments_area:
+			# Get all top-level comments directly from the already-parsed tree
+			all_top_comments = [c for c in comments_area.find_all('div', class_='thing', recursive=False) if 'comment' in c.get('class', [])]
+			total_comments = len(all_top_comments)
+
+			# Determine current page
+			cpage = int(request.args.get('cpage', '1')) if request else 1
+			if cpage < 1:
+				cpage = 1
+			start = (cpage - 1) * COMMENTS_PER_PAGE
+			end = start + COMMENTS_PER_PAGE
+			total_pages = (total_comments + COMMENTS_PER_PAGE - 1) // COMMENTS_PER_PAGE
+
+			if total_comments > COMMENTS_PER_PAGE:
+				page_info = new_soup.new_tag('p')
+				page_info_font = new_soup.new_tag('font', size="2")
+				page_info_font.string = f"Comments {start + 1}-{min(end, total_comments)} of {total_comments} (page {cpage}/{total_pages})"
+				page_info.append(page_info_font)
+				body.append(page_info)
+
 			comments_div = new_soup.new_tag('div')
 			body.append(comments_div)
-			process_comments(comments_area, comments_div, new_soup, depth=0, max_top=MAX_TOP_COMMENTS, max_depth=MAX_REPLY_DEPTH)
+
+			# Slice directly from the parsed tree — no re-serialization or re-parsing
+			page_comments = all_top_comments[start:end]
+			process_comments(page_comments, comments_div, new_soup, depth=0, max_depth=MAX_REPLY_DEPTH)
+
+			# Pagination links
+			if total_pages > 1:
+				base_path = url.replace('old.reddit.com', 'reddit.com')
+				if '?' in base_path:
+					base_path = base_path.split('?')[0]
+
+				nav_p = new_soup.new_tag('p', align="center")
+				body.append(nav_p)
+
+				if cpage > 1:
+					prev_a = new_soup.new_tag('a', href=f"{base_path}?cpage={cpage - 1}")
+					prev_a.string = "< prev"
+					nav_p.append(prev_a)
+					nav_p.append(" ")
+
+				for p in range(1, total_pages + 1):
+					if p == cpage:
+						b_tag = new_soup.new_tag('b')
+						b_tag.string = f"[{p}]"
+						nav_p.append(b_tag)
+					else:
+						page_a = new_soup.new_tag('a', href=f"{base_path}?cpage={p}")
+						page_a.string = f"[{p}]"
+						nav_p.append(page_a)
+					nav_p.append(" ")
+
+				if cpage < total_pages:
+					next_a = new_soup.new_tag('a', href=f"{base_path}?cpage={cpage + 1}")
+					next_a.string = "next >"
+					nav_p.append(next_a)
 	else:
 		site_table = soup.find('div', id='siteTable')
 		if site_table:
@@ -348,13 +444,15 @@ def process_content(content, url):
 					'alb.reddit.com' not in title_a.get('href', '') and 
 					not permalink.startswith('/user/')):
 					
-					if permalink:
-						title_a['href'] = f"http://reddit.com{permalink}"
+					# Build a clean <a> tag — strip all the data-* and tracking attributes
+					clean_href = f"http://reddit.com{permalink}" if permalink else title_a.get('href', '')
+					clean_a = new_soup.new_tag('a', href=clean_href)
+					clean_a.string = title_a.string or title_a.get_text(strip=True)
 					
 					dl = new_soup.new_tag('dl')
 					
 					dt = new_soup.new_tag('dt')
-					dt.append(title_a)
+					dt.append(clean_a)
 					dl.append(dt)
 					
 					dd = new_soup.new_tag('dd')
@@ -376,7 +474,6 @@ def process_content(content, url):
 							if comments_a:
 								font.append(f" | {comments_a.string}")
 					
-					# Add points
 					points = thing.get('data-score', 'Unknown')
 					font.append(f" | {points} points")
 					
@@ -415,24 +512,4 @@ def process_content(content, url):
 				nav_right.append(new_next)
 
 	updated_html = str(new_soup)
-
-	# ASCII substitution for classic Mac browsers
-	char_map = {
-		'\u2018': "'", '\u2019': "'", '\u201C': '"', '\u201D': '"',
-		'\u2013': '-', '\u2014': '--', '\u2026': '...', '\u00A0': ' ',
-		'\u2032': "'", '\u2033': '"', '\u00AB': '<<', '\u00BB': '>>',
-		'\u2022': '*', '\u00B7': '*', '\u2010': '-', '\u2011': '-',
-		'\u2012': '-', '\u2015': '--', '\u2212': '-', '\u00D7': 'x',
-		'\u00F7': '/', '\u2190': '<-', '\u2192': '->', '\u2264': '<=',
-		'\u2265': '>=', '\u00A9': '(c)', '\u00AE': '(R)', '\u2122': '(TM)',
-		'\u00BC': '1/4', '\u00BD': '1/2', '\u00BE': '3/4', '\u00B0': ' deg',
-	}
-	for char, replacement in char_map.items():
-		updated_html = updated_html.replace(char, replacement)
-	cleaned = []
-	for ch in updated_html:
-		if ord(ch) < 128:
-			cleaned.append(ch)
-		else:
-			cleaned.append('?')
-	return ''.join(cleaned), 200
+	return _ascii_clean(updated_html, _get_char_map()), 200

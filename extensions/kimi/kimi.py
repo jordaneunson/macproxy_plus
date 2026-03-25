@@ -58,11 +58,12 @@ HTML_CONVERSATION = """
 			<td align="left" valign="middle">
 				<form method="post" action="/">
 					<input type="text" size="40" name="command" required autocomplete="off">
-					<input type="submit" value="Submit">
+					<input type="submit" name="submit" value="Submit">
+					<input type="submit" name="submit" value="New Chat">
 				</form>
 			</td>
 			<td align="right" valign="middle">
-				<h4><font size="4"><b>KIMI</b></font></h4>
+				<font size="4"><b>KIMI</b></font>
 			</td>
 		</tr>
 	</table>
@@ -107,6 +108,9 @@ def handle_request(req):
 	if req.method == 'POST':
 		content, status_code = handle_post(req)
 	elif req.method == 'GET':
+		if req.args.get('action') == 'new':
+			messages.clear()
+			return Response(chat_interface(req), status=200, content_type='text/html')
 		content, status_code = handle_get(req)
 	else:
 		content, status_code = "Not Found", 404
@@ -123,6 +127,9 @@ def chat_interface(request):
 	output = ""
 
 	if request.method == 'POST':
+		if request.form.get('submit') == 'New Chat':
+			messages.clear()
+			return render_template_string(HTML_LANDING)
 		user_input = request.form['command']
 		messages.append({"role": "user", "content": user_input})
 
