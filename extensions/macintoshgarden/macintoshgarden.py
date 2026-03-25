@@ -456,14 +456,16 @@ def handle_detail(path):
 
     if download_links:
         body.append('<table border="1" cellpadding="4" width="100%">')
-        body.append('<tr><th>File</th><th>Size</th></tr>')
+        body.append('<tr><th>File</th><th>Size</th><th>OS</th></tr>')
         for dl in download_links:
             fname = dl['filename']
             size = dl['size'] or ''
+            os_ver = dl['os_ver'] or ''
             proxy_href = dl['proxy_url']
             body.append('<tr>')
             body.append('<td><a href="' + proxy_href + '"><b>' + fname + '</b></a></td>')
             body.append('<td>' + size + '</td>')
+            body.append('<td><font size="2">' + os_ver + '</font></td>')
             body.append('</tr>')
         body.append('</table>')
         body.append('<br>')
@@ -492,19 +494,32 @@ def _extract_downloads(soup, path):
     mirror_re = re.compile('|'.join(MIRROR_PATTERNS), re.I)
     file_ext_re = re.compile(r'\.(sit|hqx|bin|zip|img|dsk|sea|cpt|tar|gz|dmg|toast|iso|7z|pdf)(\?.*)?$', re.I)
 
-    # Build a filename -> size map from <small>filename <i>(SIZE)</i></small> elements
+    # Build filename -> size and filename -> OS version maps
+    # Structure: <small>fname <i>(SIZE)</i></small> ... For System X - Mac OS Y </div>
     size_map = {}
+    os_map = {}
+    page_html = str(soup)
+
+    # Extract sizes from <small>fname <i>(SIZE)</i></small>
     for small in soup.find_all('small'):
         i_tag = small.find('i')
         if i_tag:
             i_text = i_tag.get_text(strip=True).strip('()')
             if not i_text or not ('MB' in i_text or 'KB' in i_text or 'GB' in i_text):
                 continue
-            # Get the text before the <i> tag by removing i_tag's text from small's text
             small_text = small.get_text(strip=True)
             fname_part = small_text.replace(i_tag.get_text(), '').strip().rstrip('(').rstrip(')').strip()
             if fname_part:
                 size_map[fname_part.lower()] = i_text
+
+    # Extract OS versions — filenames and "For System..." entries appear in matching order
+    fname_matches = list(re.finditer(r'<small>([^<]+?)\s*<i>\([\d.]+ [KMGT]B</i>\)</small>', page_html))
+    os_matches = list(re.finditer(r'For\s+(System[^<]+?-[^<]+?)</div>', page_html))
+    for i, fm in enumerate(fname_matches):
+        fname_key = fm.group(1).strip().lower()
+        if i < len(os_matches):
+            os_text = re.sub(r'\s+', ' ', os_matches[i].group(1)).strip()
+            os_map[fname_key] = os_text
 
     # Collect all download links grouped by filename
     # file_groups[fname_key] = { 'filename': ..., 'size': ..., 'mirrors': [ {label, url, proxy_url}, ... ] }
@@ -562,8 +577,9 @@ def _extract_downloads(soup, path):
         fname = href.split('/')[-1].split('?')[0] or text or 'download'
         fname_key = fname.lower()
 
-        # Look up file size from the <small> elements
+        # Look up file size and OS version from the <small> elements
         size = size_map.get(fname_key, '')
+        os_ver = os_map.get(fname_key, '')
 
         # Register download for this mirror
         proxy_url = _register_download(real_url, path)
@@ -572,11 +588,15 @@ def _extract_downloads(soup, path):
             file_groups[fname_key] = {
                 'filename': fname,
                 'size': size,
+                'os_ver': os_ver,
                 'mirrors': [],
             }
             file_order.append(fname_key)
-        elif size and not file_groups[fname_key]['size']:
-            file_groups[fname_key]['size'] = size
+        else:
+            if size and not file_groups[fname_key]['size']:
+                file_groups[fname_key]['size'] = size
+            if os_ver and not file_groups[fname_key]['os_ver']:
+                file_groups[fname_key]['os_ver'] = os_ver
 
         file_groups[fname_key]['mirrors'].append({
             'label': mirror_label,
@@ -603,6 +623,7 @@ def _extract_downloads(soup, path):
         downloads.append({
             'filename': group['filename'],
             'size': group['size'],
+            'os_ver': group['os_ver'],
             'mirror_html': mirror_html,
             'proxy_url': primary_url,
         })
