@@ -81,7 +81,7 @@ The setup script lets you pick and choose which extensions to enable. Here's wha
 | **mistral** | Mistral AI chat *(requires Mistral API key)* |
 | **notyoutube** | A legally distinct parody of YouTube — encodes video via [MacFlim](https://www.macflim.com/macflim2/) |
 | **npr** | Text-only NPR news articles |
-| **macintoshgarden** | *(WIP)* Browse and download from the Macintosh Garden classic software archive |
+| **macintoshgarden** | Browse and download from the Macintosh Garden classic software archive |
 | **reddit** | Browse subreddits with dithered black-and-white images |
 | **waybackmachine** | Browse the web as it existed on any date back to 1996 |
 | **weather** | US weather forecast by ZIP code |
@@ -93,16 +93,17 @@ The setup script lets you pick and choose which extensions to enable. Here's wha
 
 ## Extension Details
 
-### Macintosh Garden *(WIP)*
+### Macintosh Garden
 
 A purpose-built extension for browsing [macintoshgarden.org](https://macintoshgarden.org) — the classic Mac software archive. Features:
 
 - **Homepage** with categories and recent additions
 - **Browse by category** (Apps, Games) with alphabetical navigation and pagination
 - **Search** across the entire archive
-- **Detail pages** with metadata, descriptions, and compatibility info (68k/PPC compatibility, author, year, etc.)
-- **Download proxy** *(not working)* — downloads files through the proxy so your vintage Mac can grab them directly. Uses a session-based approach to handle the site's token-authenticated download links. Presents download tables with filename, size, and mirror info.
-- **In-memory page caching** (15 min TTL) to reduce requests to the upstream site
+- **Detail pages** with metadata, descriptions, file sizes, and compatibility info
+- **Download proxy** — downloads files through the proxy so your vintage Mac can grab them directly. Automatically selects the best available mirror (prefers mirrors without token auth). Download tables show filename and file size.
+- **Multi-mirror support** — each file may have multiple download mirrors (Main, .SE, .DE, CA, FTP, Old). The extension prioritizes mirrors that serve files directly without CDN token authentication.
+- **Persistent session** — maintains cookies across requests to macintoshgarden.org for consistent browsing
 - All text cleaned for Mac Roman encoding compatibility
 
 ### Reddit
@@ -134,6 +135,8 @@ Changes from upstream:
 
 These changes apply across all extensions:
 
+- **HTTP redirect passthrough** — 301/302/303/307/308 redirects are passed back to the client instead of being silently followed, so the browser updates its URL and relative links resolve correctly. HTTPS redirect URLs are rewritten to HTTP for classic browser compatibility.
+- **Binary download passthrough** — `application/vnd.*` types (including .pkg installers) are no longer transcoded, preventing binary corruption during downloads.
 - **ASCII substitution** — smart quotes, em dashes, ellipses, copyright symbols, and other Unicode characters are converted to their ASCII equivalents so classic Mac browsers can display them correctly.
 - **Mac compression passthrough** — common vintage Mac formats (.sit, .hqx, .bin, .sea) bypass the proxy's transcoding and are delivered as-is.
 - **Extensions are bind-mounted** in Docker — changes to extension code take effect on container restart without rebuilding the image.
