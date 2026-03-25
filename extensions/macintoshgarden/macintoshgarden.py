@@ -544,13 +544,15 @@ def _extract_downloads(soup, path):
             continue
         seen.add(fname_key)
 
-        direct_url = href
-        if direct_url.startswith('//'):
-            direct_url = 'http:' + direct_url
-        elif direct_url.startswith('https://'):
-            direct_url = direct_url.replace('https://', 'http://', 1)
-        elif not direct_url.startswith('http://'):
-            direct_url = 'http://' + direct_url.lstrip('/')
+        # Keep the real URL (https) for actual downloading
+        real_url = href
+        if real_url.startswith('//'):
+            real_url = 'https:' + real_url
+        elif not real_url.startswith('http'):
+            real_url = 'https://' + real_url.lstrip('/')
+        # Ensure https for the CDN download
+        if real_url.startswith('http://'):
+            real_url = real_url.replace('http://', 'https://', 1)
 
         mirror_label = 'Mirror'
         if '.se' in href:
@@ -573,7 +575,8 @@ def _extract_downloads(soup, path):
                 if re.match(r'^\d+', candidate):
                     size = candidate
 
-        proxy_url = _register_download(direct_url, path)
+        # Register with the real https URL — proxy will use it directly
+        proxy_url = _register_download(real_url, path)
 
         downloads.append({
             'filename': fname,
@@ -591,7 +594,7 @@ def _extract_downloads(soup, path):
 # ---------------------------------------------------------------------------
 
 def _register_download(url, detail_path):
-    """Store a download reference and return a clean short proxy link."""
+    """Store the full tokenized download URL and return a clean short proxy link."""
     global _download_counter
     # Evict expired entries
     now = time.time()
@@ -600,12 +603,10 @@ def _register_download(url, detail_path):
         del _download_registry[k]
 
     _download_counter += 1
-    # Extract filename from URL for the Mac to see
     fname = url.split('/')[-1].split('?')[0] or 'download.bin'
-    # Store the detail page path and filename — NOT the tokenized URL
-    # Tokens expire quickly, so we re-fetch at download time
-    _download_registry[_download_counter] = (now, detail_path, fname)
-    print(f"[macintoshgarden] Registered download #{_download_counter}: {fname} (from {detail_path})")
+    # Store the full tokenized URL directly — no re-fetch needed
+    _download_registry[_download_counter] = (now, url, detail_path, fname)
+    print("[macintoshgarden] Registered download #%d: %s (from %s)" % (_download_counter, fname, detail_path))
     return 'http://macintoshgarden.org/download/' + str(_download_counter) + '/' + fname
 
 
@@ -624,57 +625,33 @@ def handle_download(request):
         return error_page('Invalid download link.', 400)
 
     now_ts = time.time()
-    print(f"[macintoshgarden] Download request for ID {dl_id}, registry has {list(_download_registry.keys())}, now={now_ts}")
+    print("[macintoshgarden] Download request for ID %d, registry has %s, now=%s" % (dl_id, list(_download_registry.keys()), now_ts))
     entry = _download_registry.get(dl_id)
     if entry:
-        print(f"[macintoshgarden] Entry timestamp={entry[0]}, age={now_ts - entry[0]}s, TTL={_DOWNLOAD_TTL}s")
+        print("[macintoshgarden] Entry timestamp=%s, age=%.1fs, TTL=%ds" % (entry[0], now_ts - entry[0], _DOWNLOAD_TTL))
     if not entry:
         return error_page('Download link expired or not found. Go back and try again.', 404)
 
-    timestamp, detail_path, target_fname = entry
+    timestamp, file_url, detail_path, target_fname = entry
     age = time.time() - timestamp
     if age > _DOWNLOAD_TTL:
         del _download_registry[dl_id]
         return error_page('Download link expired. Go back and try again.', 410)
 
-    # Use a session to maintain cookies between detail page and download
-    detail_url = BASE_URL + detail_path
-    print(f"[macintoshgarden] Re-fetching {detail_url} for fresh download token for {target_fname}")
-    session = requests.Session()
-    session.headers.update(HEADERS)
-    try:
-        detail_resp = session.get(detail_url, timeout=30)
-        detail_resp.raise_for_status()
-        print(f"[macintoshgarden] Session cookies after detail page: {dict(session.cookies)}")
-    except Exception as e:
-        return error_page('Failed to refresh download link: ' + str(e))
+    # Build the proper Referer — the detail page on macintoshgarden.org
+    referer_url = BASE_URL + detail_path
 
-    detail_soup = BeautifulSoup(detail_resp.content, 'html.parser')
-
-    # Find the fresh URL matching our target filename
-    file_url = None
-    for a in detail_soup.find_all('a', href=True):
-        href = a['href']
-        href_fname = href.split('/')[-1].split('?')[0]
-        if href_fname == target_fname:
-            file_url = href
-            if file_url.startswith('//'):
-                file_url = 'https:' + file_url
-            elif not file_url.startswith('http'):
-                file_url = 'https://' + file_url
-            break
-
-    if not file_url:
-        return error_page('Could not find fresh download link for ' + target_fname, 404)
-
-    print(f"[macintoshgarden] Fresh download URL: {file_url[:100]}")
+    print("[macintoshgarden] Downloading %s with Referer: %s" % (file_url[:100], referer_url))
 
     try:
-        # Download entire file first — no chunked encoding.
+        # Download entire file — no chunked encoding.
         # MacWeb 2.0 (HTTP/1.0) can't handle chunked transfer.
-        dl_resp = session.get(
+        dl_headers = dict(HEADERS)
+        dl_headers['Referer'] = referer_url
+
+        dl_resp = requests.get(
             file_url,
-            headers={'Referer': detail_url},
+            headers=dl_headers,
             timeout=120,
             allow_redirects=True
         )
@@ -683,13 +660,14 @@ def handle_download(request):
         data = dl_resp.content
         content_type = dl_resp.headers.get('Content-Type', 'application/octet-stream')
 
-        fname = file_url.split('/')[-1].split('?')[0] or 'download.bin'
+        fname = target_fname or 'download.bin'
         response_headers = {
             'Content-Type': content_type,
             'Content-Length': str(len(data)),
             'Content-Disposition': 'attachment; filename="' + fname + '"',
         }
 
+        print("[macintoshgarden] Download OK: %s (%d bytes)" % (fname, len(data)))
         return Response(
             data,
             status=200,
@@ -698,6 +676,8 @@ def handle_download(request):
 
     except requests.HTTPError as e:
         code = e.response.status_code if e.response is not None else 500
-        return error_page('Download failed: ' + str(e), code)
+        print("[macintoshgarden] Download FAILED: HTTP %d for %s" % (code, file_url[:100]))
+        return error_page('Download failed (HTTP %d). The token may have expired — go back to the detail page and try again.' % code, code)
     except Exception as e:
+        print("[macintoshgarden] Download ERROR: %s" % str(e))
         return error_page('Download error: ' + str(e))
