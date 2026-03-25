@@ -13,10 +13,16 @@ _CACHE_TTL = 900  # 15 minutes for all pages
 _MAX_CACHE_ENTRIES = 200
 
 # Download URL registry — maps short IDs to real download URLs
-# Keyed by index (int), value is (timestamp, url)
+# Keyed by index (int), value is (timestamp, url, detail_path, fname, cookies_dict)
 _download_registry = {}
 _download_counter = 0
 _DOWNLOAD_TTL = 3600  # 1 hour
+
+# Persistent session for all macintoshgarden.org requests — maintains cookies
+_http_session = requests.Session()
+_http_session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
+})
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
@@ -80,7 +86,7 @@ def error_page(message, status=500):
 
 
 def fetch(url, ttl=None):
-    resp = requests.get(url, headers=HEADERS, timeout=15, allow_redirects=True)
+    resp = _http_session.get(url, timeout=15, allow_redirects=True)
     resp.raise_for_status()
     return resp
 
@@ -594,7 +600,7 @@ def _extract_downloads(soup, path):
 # ---------------------------------------------------------------------------
 
 def _register_download(url, detail_path):
-    """Store the full tokenized download URL and return a clean short proxy link."""
+    """Store the full tokenized download URL and session cookies."""
     global _download_counter
     # Evict expired entries
     now = time.time()
@@ -604,9 +610,10 @@ def _register_download(url, detail_path):
 
     _download_counter += 1
     fname = url.split('/')[-1].split('?')[0] or 'download.bin'
-    # Store the full tokenized URL directly — no re-fetch needed
-    _download_registry[_download_counter] = (now, url, detail_path, fname)
-    print("[macintoshgarden] Registered download #%d: %s (from %s)" % (_download_counter, fname, detail_path))
+    # Snapshot current session cookies so the download can reuse them
+    cookies = dict(_http_session.cookies)
+    _download_registry[_download_counter] = (now, url, detail_path, fname, cookies)
+    print("[macintoshgarden] Registered download #%d: %s (from %s) cookies=%s" % (_download_counter, fname, detail_path, list(cookies.keys())))
     return 'http://macintoshgarden.org/download/' + str(_download_counter) + '/' + fname
 
 
@@ -632,7 +639,7 @@ def handle_download(request):
     if not entry:
         return error_page('Download link expired or not found. Go back and try again.', 404)
 
-    timestamp, file_url, detail_path, target_fname = entry
+    timestamp, file_url, detail_path, target_fname, cookies = entry
     age = time.time() - timestamp
     if age > _DOWNLOAD_TTL:
         del _download_registry[dl_id]
@@ -641,17 +648,17 @@ def handle_download(request):
     # Build the proper Referer — the detail page on macintoshgarden.org
     referer_url = BASE_URL + detail_path
 
-    print("[macintoshgarden] Downloading %s with Referer: %s" % (file_url[:100], referer_url))
+    print("[macintoshgarden] Downloading %s with Referer: %s cookies=%s" % (file_url[:100], referer_url, list(cookies.keys())))
 
     try:
         # Download entire file — no chunked encoding.
         # MacWeb 2.0 (HTTP/1.0) can't handle chunked transfer.
-        dl_headers = dict(HEADERS)
-        dl_headers['Referer'] = referer_url
+        # Use the persistent session with saved cookies for auth
+        _http_session.cookies.update(cookies)
 
-        dl_resp = requests.get(
+        dl_resp = _http_session.get(
             file_url,
-            headers=dl_headers,
+            headers={'Referer': referer_url},
             timeout=120,
             allow_redirects=True
         )
