@@ -456,16 +456,14 @@ def handle_detail(path):
 
     if download_links:
         body.append('<table border="1" cellpadding="4" width="100%">')
-        body.append('<tr><th>File</th><th>Size</th><th>Mirrors</th></tr>')
+        body.append('<tr><th>File</th><th>Size</th></tr>')
         for dl in download_links:
             fname = dl['filename']
             size = dl['size'] or ''
-            mirror_html = dl['mirror_html']
             proxy_href = dl['proxy_url']
             body.append('<tr>')
             body.append('<td><a href="' + proxy_href + '"><b>' + fname + '</b></a></td>')
             body.append('<td>' + size + '</td>')
-            body.append('<td>' + mirror_html + '</td>')
             body.append('</tr>')
         body.append('</table>')
         body.append('<br>')
