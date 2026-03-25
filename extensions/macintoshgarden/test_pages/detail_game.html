@@ -1,0 +1,149 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<link rel="icon" type="image/vnd.microsoft.icon" href="/sites/macintoshgarden.org/themes/vines/favicon.ico" />
+	<link type="text/css" rel="stylesheet" media="all" href="/sites/macintoshgarden.org/files/css/css_4e29aed313ab0ee03c4621797f45f5f6.css" />
+        <script type="text/javascript" src="/sites/macintoshgarden.org/files/js/js_25666e7e30485deb95a34278a56a10b6.js"></script>
+<script type="text/javascript">
+<!--//--><![CDATA[//><!--
+jQuery.extend(Drupal.settings, { "basePath": "\u002F", "fivestar": { "titleUser": "Your rating: ", "titleAverage": "Average: ", "feedbackSavingVote": "Saving your vote...", "feedbackVoteSaved": "Your vote has been saved.", "feedbackDeletingVote": "Deleting your vote...", "feedbackVoteDeleted": "Your vote has been deleted." }, "thickbox": { "close": "Close", "next": "Next \u003E", "prev": "\u003C Prev", "esc_key": "or Esc Key", "next_close": "Next \u002F Close on last", "image_count": "Image !current of !total" }, "settings": { "settings_use_default_mark": "\u003Cspan class=\u0022settings_use_default_mark\u0022\u003E(default)\u003C\u002Fspan\u003E" }, "CToolsUrlIsAjaxTrusted": { "\u002Fgames\u002Fchess": true } });
+//--><!]]>
+</script>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link rel="shortcut icon" href="/sites/macintoshgarden.org/themes/vines/favicon.ico" type="image/x-icon" />
+<meta name="description" content="A program written in Symantec C++/TCL 1.1.3 which, as you might guess, plays chess. It was used as the demo project for the introduction of Symantec's new THINK Project Manager at the World Wide Developer's Conference (WWDC) in California in early May, 1993." />
+<link rel="canonical" href="https://macintoshgarden.org/games/chess" />
+<meta name="robots" content="noindex, nofollow, noarchive" />
+
+	<title>Chess++ - Macintosh Garden</title>
+</head>
+
+<body>
+	<div id="wrapper">
+		<div id="header">
+			                                <div id="login">
+                                        <a href="/user/login">log in</a> or <a href="/user/register">create an account</a><br />
+					<a href="/tracker">recent changes</a>
+                                </div>
+                        			<a href="/"><img src="/sites/macintoshgarden.org/themes/vines/images/mg.gif" alt="Macintosh Garden" /></a>
+		</div>
+		<div id="nav">
+		    <ul>
+			<li><a href="/games/all">games</a></li>
+			<li><a href="/apps/all">apps</a></li>
+			<li><a href="/macintosh-garden-guides">guides</a></li>
+			<li><form method="post" action="/search/node" class="search-form">
+			<ul><li><input type="text" maxlength="128" name="keys" size="15" title="Enter the games name, author or the year it was released, then hit enter." class="input-text" value="Search..." onfocus="if(this.value==this.defaultValue)this.value='';" onblur="if(this.value=='')this.value=this.defaultValue;" />
+			<input type="hidden" value="84727b2ccab3419caf8de9648dfb56cc" name="form_token" />
+			<input type="hidden" value="search_form" name="form_id" />
+			</li></ul>
+			</form>
+			</li>
+				<li><a href="/forum">forum</a></li>
+				<li><a href="/forum/public-access-file-repository">ftp</a></li>
+				<li><a href="/about">about</a></li>
+			</ul>
+		</div>
+		<div id="paper">
+							<span class="edit-page">This page is a wiki. Please <a href="/user/login">login</a> or <a href="/user/register">create an account</a> to begin editing.</span>
+						<div class="breadcrumb"><a href="/">Home</a> › <a href="/games">Games</a> › <a href="/games/board">Board Game</a></div>									<br />
+			<br />
+			<a href="/stats/top10" style="display:none">.</a>
+<h1>Chess++</h1>
+<div class="game-preview">
+	<div class="images">
+		<span>
+							<a href="https://macintoshgarden.org/sites/macintoshgarden.org/files/screenshots/c_11.gif" title="Game screenshot" class="thickbox" rel="gallery-all"><img src="https://macintoshgarden.org/sites/macintoshgarden.org/files/imagecache/thumbnail/screenshots/c_11.gif" alt="Game screenshot" title="Game screenshot" width="32" height="32" class="imagecache imagecache-thumbnail"/></a>					<img class="magnify" src="/sites/macintoshgarden.org/themes/vines/images/system-search.gif" alt="" />
+		</span>
+					<a href="/sites/macintoshgarden.org/files/screenshots/1_565.gif" class="thickbox" rel="gallery-all">
+				<img class="small" alt="Screenshot" src="/sites/macintoshgarden.org/files/imagecache/small/screenshots/1_565.gif" title="" alt="Game screenshot" />
+			</a>
+					<a href="/sites/macintoshgarden.org/files/screenshots/2_463.gif" class="thickbox" rel="gallery-all">
+				<img class="small" alt="Screenshot" src="/sites/macintoshgarden.org/files/imagecache/small/screenshots/2_463.gif" title="" alt="Game screenshot" />
+			</a>
+					<a href="/sites/macintoshgarden.org/files/screenshots/3_176.gif" class="thickbox" rel="gallery-all">
+				<img class="small" alt="Screenshot" src="/sites/macintoshgarden.org/files/imagecache/small/screenshots/3_176.gif" title="" alt="Game screenshot" />
+			</a>
+				<br />
+			</div>
+	<div class="descr">
+		<table>
+			<tr><td><strong>Rating:</strong></td><td><div class="fivestar-static-form-item"><div class="form-item">
+ <div class="fivestar-widget-static fivestar-widget-static-vote fivestar-widget-static-5 clear-block"><div class="star star-1 star-odd star-first"><span class="off">0</span></div><div class="star star-2 star-even"><span class="off"></span></div><div class="star star-3 star-odd"><span class="off"></span></div><div class="star star-4 star-even"><span class="off"></span></div><div class="star star-5 star-odd star-last"><span class="off"></span></div></div>
+ <div class="description"><div class="fivestar-summary fivestar-summary-user"><span class="user-rating">Your rating: <span>None</span></span></div></div>
+</div>
+</div></td></tr>
+			<tr><td><strong>Category:</strong></td><td><ul class="links inline"><li class="0 first last"><a href="/games/board" rel="tag">Board Game</a></li>
+</ul>			</td></tr>
+			<tr><td><strong>Perspective:</strong></td><td><ul class="links inline"><li class="0 first last"><a href="/perspective/top-down" rel="tag">Top Down</a></li>
+</ul>			</td></tr>
+			<tr><td><strong>Year released:</strong></td><td><ul class="links inline"><li class="0 first last"><a href="/year/1993" rel="tag">1993</a></li>
+</ul>			</td></tr>
+			<tr>
+				<td><strong>Author:</strong></td>
+				<td>
+			<a href="/author/steven-j-bushell" rel="tag" title="">Steven J. Bushell</a>			<br />
+						</td></tr>
+			<tr>
+				<td><strong>Publisher:</strong></td>
+				<td>
+				<a href="/author/symantec" rel="tag" title="">Symantec</a>			<br />
+						</td></tr>
+			<tr>
+				<td><strong>Engine:</strong></td>
+				<td></td>
+			</tr>
+		</table>
+									<div class="note download"><div class="note numeral"><small>#1, 2022-03-22</small></div>
+					<strong>[<a href="//download.macintoshgarden.org/games/Chess_3.0.1.sit?expires=1774414674&token=3_cAG9wJWXWtdit5J39KOA&st=0d65b4aea7a370089efff0b5e7f8dc47">www</a>]<small><sub>.se</small></sub> [<a href="//old.mac.gdn/games/Chess_3.0.1.sit">mirror</a>]<small><sub>.de</small></sub><!-- [<a href="//mirror:mirror@tfp.macintosh.garden/games/Chess_3.0.1.sit">ftp</a>]<small><sub>.de</small></sub> -->
+					</strong>
+					<br/><small>Chess_3.0.1.sit <i>(330.47 KB</i>)</small><br />
+<small>MD5: <a href='//macintoshgarden.org/arch_md5.php?filename=Chess_3.0.1.sit'>8f1878043b36f511c6deedefb3b77ac7</a></small></br>
+											For
+												System 6.x										 - Mac OS 9				</div>
+							<div class="note download"><div class="note numeral"><small>#2, 2024-05-12</small></div>
+					<strong>[<a href="//download.macintoshgarden.org/games/chess-3.0.1-source-code.hqx?expires=1774414674&token=eQYxRhTEdPHedrvZM_LvFw&st=393ff84970735ae5d34aca234de7f8cd">www</a>]<small><sub>.se</small></sub> [<a href="//old.mac.gdn/games/chess-3.0.1-source-code.hqx">mirror</a>]<small><sub>.de</small></sub><!-- [<a href="//mirror:mirror@tfp.macintosh.garden/games/chess-3.0.1-source-code.hqx">ftp</a>]<small><sub>.de</small></sub> -->
+					</strong>
+					<br/><small>chess-3.0.1-source-code.hqx <i>(274.27 KB</i>)</small><br />
+<small>MD5: <a href='//macintoshgarden.org/arch_md5.php?filename=chess-3.0.1-source-code.hqx'>c2cc83a7e6be4049ea76262d9a045ec1</a></small></br>
+											For
+												System 6.x										 - Mac OS 9				</div>
+							
+		
+		
+		<div class="note emulation">
+			<strong><a href="/guides">Emulation</a></strong><br />
+
+					This game works with:
+													<a href="/guides#SheepShaver">SheepShaver</a>,
+										                                                                                       																						<a href="/guides#BasiliskII">Basilisk II</a>,
+							                                                                                       																						                                 		<a href="/guides#MinivMacII">Mini vMac II</a>
+             		                                                                       																</div>
+	</div>
+</div>
+<p>A program written in Symantec C++/TCL 1.1.3 which, as you might guess, plays chess.  </p>
+<p>It was used as the demo project for the introduction of Symantec's new THINK Project Manager at the World Wide Developer's Conference (WWDC) in California in early May, 1993.<br />
+During that introduction, the project unexpectedly quit, but no one knows why, and no one can reproduce a crash on any machine.  If you can, let me know how you did it!</p>
+<p><b>Features:</b></p>
+<p>Chess++ does in fact play chess, offers different levels of play, and can be great if you're learning to play chess because if you option click on one of your chess pieces, the squares that you can move to will be highlighted. </p>
+<p>Chess++ will "think" in the background, and you can alter its degree of "multifinder friendliness".  Take a look at the options dialog and you'll see. The "Back propagation" option in the dialog is bogus.  Sorry. </p>
+<p>Chess++ can show you the current piece it's thinking about, and can optionally beep everytime it finds a better move to make against you. One other feature which has been in there since the very beginning of the Mac version is a "Tell Time" command.  Like it says, it tells the time, in my voice. It's a little cheezy, but I couldn't resist leaving it in there. The about box is kinda neat, and comes in three flavors, which are chosen at random.</p>
+<p><b>Limitations:</b></p>
+<p>Chess++ is by no means the best chess program around - as a matter of fact, it's far from it.  There is no opening move library, the endgame is rather weak, you still cannot castle or capture en passant, and unless you play on the highest level, it can be pretty easy to beat.<br />
+This program is not here to be the best chess program around;<br />
+it's here only as a demo program for you to look at and enjoy.<br />
+If you're not enjoying it, don't look at it!</p>
+<p><b>DL #1</b> Chess++ v3.0.1<br />
+<b>DL #2</b> Chess++ v3.0.1 source code</p>
+	<strong>Compatibility</strong><br />
+			Architecture: 68k			                	
+					</div>
+	<div id="footer">
+			<p><strong>Disclaimer:</strong> Macintosh Garden does not claim rights to any software on the site. To the best of our knowledge, these titles have been discontinued by their publishers. If you know otherwise, please <a href="/contact">contact us</a> and we will remove them accordingly. Thank you for your attention.</p>
+		</div>
+	</div>
+	</body>
+</html>

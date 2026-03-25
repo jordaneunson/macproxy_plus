@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from flask import Response, stream_with_context
+from flask import Response
 import urllib.parse
 import re
 import time
@@ -11,6 +11,12 @@ DOMAIN = "macintoshgarden.org"
 _page_cache = {}
 _CACHE_TTL = 900  # 15 minutes for all pages
 _MAX_CACHE_ENTRIES = 200
+
+# Download URL registry — maps short IDs to real download URLs
+# Keyed by index (int), value is (timestamp, url)
+_download_registry = {}
+_download_counter = 0
+_DOWNLOAD_TTL = 3600  # 1 hour
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
@@ -567,8 +573,7 @@ def _extract_downloads(soup, path):
                 if re.match(r'^\d+', candidate):
                     size = candidate
 
-        encoded = urllib.parse.quote(direct_url, safe='')
-        proxy_url = 'http://macintoshgarden.org/download/' + encoded
+        proxy_url = _register_download(direct_url, path)
 
         downloads.append({
             'filename': fname,
@@ -585,60 +590,106 @@ def _extract_downloads(soup, path):
 # Download proxy
 # ---------------------------------------------------------------------------
 
+def _register_download(url, detail_path):
+    """Store a download reference and return a clean short proxy link."""
+    global _download_counter
+    # Evict expired entries
+    now = time.time()
+    expired = [k for k, v in _download_registry.items() if now - v[0] > _DOWNLOAD_TTL]
+    for k in expired:
+        del _download_registry[k]
+
+    _download_counter += 1
+    # Extract filename from URL for the Mac to see
+    fname = url.split('/')[-1].split('?')[0] or 'download.bin'
+    # Store the detail page path and filename — NOT the tokenized URL
+    # Tokens expire quickly, so we re-fetch at download time
+    _download_registry[_download_counter] = (now, detail_path, fname)
+    print(f"[macintoshgarden] Registered download #{_download_counter}: {fname} (from {detail_path})")
+    return 'http://macintoshgarden.org/download/' + str(_download_counter) + '/' + fname
+
+
 def handle_download(request):
     """Proxy the actual file download so a vintage Mac can grab it."""
-    path = request.path  # /download/<encoded_url>
-    encoded = path[len('/download/'):]
+    path = request.path  # /download/<id>/<filename>
+    parts = path[len('/download/'):].split('/', 1)
+    dl_id_str = parts[0]
 
-    if not encoded:
+    if not dl_id_str:
         return error_page('No download URL specified.', 400)
 
-    file_url = urllib.parse.unquote(encoded)
+    try:
+        dl_id = int(dl_id_str)
+    except ValueError:
+        return error_page('Invalid download link.', 400)
 
-    allowed = re.compile(
-        r'^https?://(www\.)?(macintoshgarden\.org|'
-        r'download\.macintoshgarden\.org|'
-        r'macintoshgarden\.org\.se|macintoshgarden\.r-fx\.ca|'
-        r'files\.macintoshgarden\.org|macintoshgarden\.org\.de|'
-        r'ftp\.macintoshgarden|old\.mac\.gdn)',
-        re.I
-    )
-    if not allowed.match(file_url):
-        return error_page('Download source not allowed.', 403)
+    now_ts = time.time()
+    print(f"[macintoshgarden] Download request for ID {dl_id}, registry has {list(_download_registry.keys())}, now={now_ts}")
+    entry = _download_registry.get(dl_id)
+    if entry:
+        print(f"[macintoshgarden] Entry timestamp={entry[0]}, age={now_ts - entry[0]}s, TTL={_DOWNLOAD_TTL}s")
+    if not entry:
+        return error_page('Download link expired or not found. Go back and try again.', 404)
+
+    timestamp, detail_path, target_fname = entry
+    age = time.time() - timestamp
+    if age > _DOWNLOAD_TTL:
+        del _download_registry[dl_id]
+        return error_page('Download link expired. Go back and try again.', 410)
+
+    # Re-fetch the detail page (bypassing cache) to get fresh download tokens
+    detail_url = BASE_URL + detail_path
+    print(f"[macintoshgarden] Re-fetching {detail_url} for fresh download token for {target_fname}")
+    try:
+        detail_resp = requests.get(detail_url, headers=HEADERS, timeout=30)
+        detail_resp.raise_for_status()
+    except Exception as e:
+        return error_page('Failed to refresh download link: ' + str(e))
+
+    detail_soup = BeautifulSoup(detail_resp.content, 'html.parser')
+
+    # Find the fresh URL matching our target filename
+    file_url = None
+    for a in detail_soup.find_all('a', href=True):
+        href = a['href']
+        href_fname = href.split('/')[-1].split('?')[0]
+        if href_fname == target_fname:
+            file_url = href
+            if file_url.startswith('//'):
+                file_url = 'https:' + file_url
+            elif not file_url.startswith('http'):
+                file_url = 'https://' + file_url
+            break
+
+    if not file_url:
+        return error_page('Could not find fresh download link for ' + target_fname, 404)
+
+    print(f"[macintoshgarden] Fresh download URL: {file_url[:100]}")
 
     try:
+        # Download entire file first — no chunked encoding.
+        # MacWeb 2.0 (HTTP/1.0) can't handle chunked transfer.
         dl_resp = requests.get(
             file_url,
             headers=HEADERS,
-            stream=True,
-            timeout=30,
+            timeout=120,
             allow_redirects=True
         )
         dl_resp.raise_for_status()
 
+        data = dl_resp.content
         content_type = dl_resp.headers.get('Content-Type', 'application/octet-stream')
-        content_length = dl_resp.headers.get('Content-Length')
 
-        response_headers = {'Content-Type': content_type}
-        if content_length:
-            response_headers['Content-Length'] = content_length
-
-        cd = dl_resp.headers.get('Content-Disposition', '')
-        if cd:
-            response_headers['Content-Disposition'] = cd
-        else:
-            fname = file_url.split('/')[-1].split('?')[0]
-            if fname:
-                response_headers['Content-Disposition'] = 'attachment; filename="' + fname + '"'
-
-        def generate():
-            for chunk in dl_resp.iter_content(chunk_size=8192):
-                if chunk:
-                    yield chunk
+        fname = file_url.split('/')[-1].split('?')[0] or 'download.bin'
+        response_headers = {
+            'Content-Type': content_type,
+            'Content-Length': str(len(data)),
+            'Content-Disposition': 'attachment; filename="' + fname + '"',
+        }
 
         return Response(
-            stream_with_context(generate()),
-            status=dl_resp.status_code,
+            data,
+            status=200,
             headers=response_headers
         )
 
