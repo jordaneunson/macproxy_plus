@@ -634,6 +634,16 @@ def handle_download(request):
             timeout=120,
             allow_redirects=True
         )
+
+        # Log full request/response details for debugging
+        print("[macintoshgarden] === REQUEST DETAILS ===")
+        print("[macintoshgarden] URL: %s" % file_url)
+        print("[macintoshgarden] Request headers: %s" % dict(dl_resp.request.headers))
+        print("[macintoshgarden] === RESPONSE DETAILS ===")
+        print("[macintoshgarden] Status: %d" % dl_resp.status_code)
+        print("[macintoshgarden] Response headers: %s" % dict(dl_resp.headers))
+        if dl_resp.status_code >= 400:
+            print("[macintoshgarden] Response body: %s" % dl_resp.text[:500])
         dl_resp.raise_for_status()
 
         data = dl_resp.content
