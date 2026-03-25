@@ -637,12 +637,15 @@ def handle_download(request):
         del _download_registry[dl_id]
         return error_page('Download link expired. Go back and try again.', 410)
 
-    # Re-fetch the detail page (bypassing cache) to get fresh download tokens
+    # Use a session to maintain cookies between detail page and download
     detail_url = BASE_URL + detail_path
     print(f"[macintoshgarden] Re-fetching {detail_url} for fresh download token for {target_fname}")
+    session = requests.Session()
+    session.headers.update(HEADERS)
     try:
-        detail_resp = requests.get(detail_url, headers=HEADERS, timeout=30)
+        detail_resp = session.get(detail_url, timeout=30)
         detail_resp.raise_for_status()
+        print(f"[macintoshgarden] Session cookies after detail page: {dict(session.cookies)}")
     except Exception as e:
         return error_page('Failed to refresh download link: ' + str(e))
 
@@ -669,9 +672,9 @@ def handle_download(request):
     try:
         # Download entire file first — no chunked encoding.
         # MacWeb 2.0 (HTTP/1.0) can't handle chunked transfer.
-        dl_resp = requests.get(
+        dl_resp = session.get(
             file_url,
-            headers=HEADERS,
+            headers={'Referer': detail_url},
             timeout=120,
             allow_redirects=True
         )

@@ -17,7 +17,14 @@ def handle_request(request):
 		return Response("Only GET requests are supported", status=405)
 
 	url = request.url
-	
+
+	# Outbound proxy — fetch external article, strip images/CSS/JS
+	if '/outbound' in request.path:
+		target = request.args.get('url', '')
+		if not target:
+			return Response("No URL specified", status=400)
+		return handle_outbound(target)
+
 	if not url.startswith(('http://old.reddit.com', 'https://old.reddit.com')):
 		url = url.replace("reddit.com", "old.reddit.com", 1)
 	
@@ -28,6 +35,96 @@ def handle_request(request):
 		return process_content(resp.content, url)
 	except requests.RequestException as e:
 		return Response(f"An error occurred: {str(e)}", status=500)
+
+
+def handle_outbound(target_url):
+	"""Fetch an external page linked from Reddit, strip images and heavy content."""
+	import urllib.parse
+
+	# ASCII substitution map (same as process_content)
+	char_map = {
+		'\u2018': "'", '\u2019': "'", '\u201C': '"', '\u201D': '"',
+		'\u2013': '-', '\u2014': '--', '\u2026': '...', '\u00A0': ' ',
+		'\u2032': "'", '\u2033': '"', '\u00AB': '<<', '\u00BB': '>>',
+		'\u2022': '*', '\u00B7': '*', '\u2010': '-', '\u2011': '-',
+		'\u2012': '-', '\u2015': '--', '\u2212': '-', '\u00D7': 'x',
+		'\u00F7': '/', '\u2190': '<-', '\u2192': '->', '\u2264': '<=',
+		'\u2265': '>=', '\u00A9': '(c)', '\u00AE': '(R)', '\u2122': '(TM)',
+		'\u00BC': '1/4', '\u00BD': '1/2', '\u00BE': '3/4', '\u00B0': ' deg',
+	}
+
+	try:
+		headers = {'User-Agent': USER_AGENT}
+		resp = requests.get(target_url, headers=headers, allow_redirects=True, timeout=15)
+		resp.raise_for_status()
+	except requests.RequestException as e:
+		return f"<html><head><title>Error</title></head><body><p><b>Could not load article:</b> {str(e)}</p><p><a href=\"http://reddit.com/\">Back to Reddit</a></p></body></html>", 500
+
+	soup = BeautifulSoup(resp.content, 'html.parser')
+
+	# Extract page title
+	page_title = soup.title.string.strip() if soup.title and soup.title.string else target_url
+
+	# Remove all images, scripts, styles, iframes, video, audio, svg, canvas, noscript
+	for tag in soup.find_all(['img', 'script', 'style', 'iframe', 'video', 'audio',
+							  'svg', 'canvas', 'noscript', 'picture', 'source', 'figure']):
+		tag.decompose()
+
+	# Remove all style attributes
+	for tag in soup.find_all(True):
+		if tag.has_attr('style'):
+			del tag['style']
+		if tag.has_attr('class'):
+			del tag['class']
+
+	# Try to find the article body
+	article = (
+		soup.find('article') or
+		soup.find('div', {'role': 'article'}) or
+		soup.find('div', id=lambda x: x and 'article' in x.lower()) or
+		soup.find('main') or
+		soup.find('div', id='content') or
+		soup.find('div', class_='content')
+	)
+
+	if article:
+		body_text = article.get_text(separator='\n', strip=True)
+	else:
+		# Fallback: grab the whole body
+		body_tag = soup.find('body')
+		body_text = body_tag.get_text(separator='\n', strip=True) if body_tag else ''
+
+	# Clean up excessive blank lines
+	lines = [line.strip() for line in body_text.split('\n')]
+	lines = [line for line in lines if line]
+	# Truncate very long articles
+	if len(lines) > 200:
+		lines = lines[:200]
+		lines.append('[Article truncated]')
+
+	body_html = '\n'.join(f'<p>{line}</p>' for line in lines)
+
+	html = (
+		f'<html><head><title>{page_title}</title></head><body>'
+		f'<h2>{page_title}</h2>'
+		f'<font size="2"><a href="{target_url}">{target_url}</a></font>'
+		f'<hr>'
+		f'{body_html}'
+		f'<hr>'
+		f'<a href="http://reddit.com/">Back to Reddit</a>'
+		f'</body></html>'
+	)
+
+	# ASCII cleanup
+	for char, replacement in char_map.items():
+		html = html.replace(char, replacement)
+	cleaned = []
+	for ch in html:
+		if ord(ch) < 128:
+			cleaned.append(ch)
+		else:
+			cleaned.append('?')
+	return ''.join(cleaned), 200
 
 def process_comments(comments_area, parent_element, new_soup, depth=0, max_top=None, max_depth=None):
 	count = 0
@@ -165,23 +262,43 @@ def process_content(content, url):
 				
 				if title_a:
 					d = new_soup.new_tag('div')
-					b = new_soup.new_tag('b')
-					b.string = title_a.string
-					d.append(b)
-					d.append(new_soup.new_tag('br'))
-					
+					dl = new_soup.new_tag('dl')
+					dt = new_soup.new_tag('dt')
+					original_href = title_a.get('href', '')
+					# If link is external (not a reddit self post), make it clickable via outbound proxy
+					title_font = new_soup.new_tag('font', size="4")
+					if original_href and 'reddit.com' not in original_href:
+						import urllib.parse
+						outbound_url = 'http://reddit.com/outbound?url=' + urllib.parse.quote(original_href, safe='')
+						a_tag = new_soup.new_tag('a', href=outbound_url)
+						b = new_soup.new_tag('b')
+						b.string = title_a.string
+						a_tag.append(b)
+						title_font.append(a_tag)
+					else:
+						b = new_soup.new_tag('b')
+						b.string = title_a.string
+						title_font.append(b)
+					dt.append(title_font)
+					dl.append(dt)
+
+					dd = new_soup.new_tag('dd')
+					font = new_soup.new_tag('font', size="2")
 					if tagline:
 						time_element = tagline.find('time', class_='live-timestamp')
 						author_element = tagline.find('a', class_='author')
 						
-						d.append("submitted ")
+						font.append("submitted ")
 						if time_element:
-							d.append(time_element.string)
-						d.append(" by ")
+							font.append(time_element.string)
+						font.append(" by ")
 						if author_element:
 							b_author = new_soup.new_tag('b')
 							b_author.string = author_element.string
-							d.append(b_author)
+							font.append(b_author)
+					dl.append(dd)
+					dd.append(font)
+					d.append(dl)
 					
 					# Add preview images if they exist and are not in gallery-tile-content
 					preview_imgs = soup.find_all('img', class_='preview')
