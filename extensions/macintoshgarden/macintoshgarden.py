@@ -456,7 +456,7 @@ def handle_detail(path):
 
     if download_links:
         body.append('<table border="1" cellpadding="4" width="100%">')
-        body.append('<tr><th>File</th><th>Size</th><th>OS</th></tr>')
+        body.append('<tr><th>File</th><th>OS</th><th>Size</th></tr>')
         for dl in download_links:
             fname = dl['filename']
             size = dl['size'] or ''
@@ -464,8 +464,8 @@ def handle_detail(path):
             proxy_href = dl['proxy_url']
             body.append('<tr>')
             body.append('<td><a href="' + proxy_href + '"><b>' + fname + '</b></a></td>')
-            body.append('<td>' + size + '</td>')
             body.append('<td><font size="2">' + os_ver + '</font></td>')
+            body.append('<td>' + size + '</td>')
             body.append('</tr>')
         body.append('</table>')
         body.append('<br>')
@@ -512,14 +512,16 @@ def _extract_downloads(soup, path):
             if fname_part:
                 size_map[fname_part.lower()] = i_text
 
-    # Extract OS versions — filenames and "For System..." entries appear in matching order
+    # Extract OS versions — filenames and "For System/Mac OS..." entries appear in matching order
     fname_matches = list(re.finditer(r'<small>([^<]+?)\s*<i>\([\d.]+ [KMGT]B</i>\)</small>', page_html))
-    os_matches = list(re.finditer(r'For\s+(System[^<]+?-[^<]+?)</div>', page_html))
+    os_matches = list(re.finditer(r'For\s+((?:System|Mac\s*OS)[^<]+?)</div>', page_html))
+    print("[macintoshgarden] OS parsing: %d filenames, %d OS entries" % (len(fname_matches), len(os_matches)))
     for i, fm in enumerate(fname_matches):
         fname_key = fm.group(1).strip().lower()
         if i < len(os_matches):
             os_text = re.sub(r'\s+', ' ', os_matches[i].group(1)).strip()
             os_map[fname_key] = os_text
+            print("[macintoshgarden] OS map: %s -> %s" % (fname_key, os_text))
 
     # Collect all download links grouped by filename
     # file_groups[fname_key] = { 'filename': ..., 'size': ..., 'mirrors': [ {label, url, proxy_url}, ... ] }
