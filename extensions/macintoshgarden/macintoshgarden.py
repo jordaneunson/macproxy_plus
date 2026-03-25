@@ -7,11 +7,6 @@ import time
 
 DOMAIN = "macintoshgarden.org"
 
-# Simple TTL cache for fetched pages (URL -> (timestamp, response_content))
-_page_cache = {}
-_CACHE_TTL = 900  # 15 minutes for all pages
-_MAX_CACHE_ENTRIES = 200
-
 # Download URL registry — maps short IDs to real download URLs
 # Keyed by index (int), value is (timestamp, url, detail_path, fname, cookies_dict)
 _download_registry = {}
@@ -91,32 +86,7 @@ def fetch(url, ttl=None):
     return resp
 
 
-def fetch_cached(url, ttl=None):
-    """Fetch with in-memory caching. Returns response content (bytes)."""
-    if ttl is None:
-        ttl = _CACHE_TTL
-    now = time.time()
 
-    # Check cache
-    if url in _page_cache:
-        cached_time, cached_content = _page_cache[url]
-        if now - cached_time < ttl:
-            return cached_content
-
-    # Evict old entries if cache is full
-    if len(_page_cache) >= _MAX_CACHE_ENTRIES:
-        expired = [k for k, (t, _) in _page_cache.items() if now - t > ttl]
-        for k in expired:
-            del _page_cache[k]
-        # If still full, drop oldest half
-        if len(_page_cache) >= _MAX_CACHE_ENTRIES:
-            sorted_keys = sorted(_page_cache, key=lambda k: _page_cache[k][0])
-            for k in sorted_keys[:len(sorted_keys) // 2]:
-                del _page_cache[k]
-
-    resp = fetch(url)
-    _page_cache[url] = (now, resp.content)
-    return resp.content
 
 
 def handle_request(request):
@@ -156,7 +126,7 @@ def handle_request(request):
 
 def handle_homepage():
     try:
-        content = fetch_cached(BASE_URL + "/", ttl=_CACHE_TTL)
+        content = fetch(BASE_URL + "/").content
         soup = BeautifulSoup(content, 'html.parser')
     except Exception as e:
         return error_page(str(e))
@@ -223,7 +193,7 @@ def handle_listing(path):
     target = BASE_URL + path
 
     try:
-        content = fetch_cached(target, ttl=_CACHE_TTL)
+        content = fetch(target).content
         soup = BeautifulSoup(content, 'html.parser')
     except Exception as e:
         return error_page(str(e))
@@ -322,7 +292,7 @@ def handle_search(query):
     target = BASE_URL + "/search/node/" + encoded
 
     try:
-        content = fetch_cached(target)
+        content = fetch(target).content
         soup = BeautifulSoup(content, 'html.parser')
     except Exception as e:
         return error_page(str(e))
@@ -648,17 +618,16 @@ def handle_download(request):
         del _download_registry[dl_id]
         return error_page('Download link expired. Go back and try again.', 410)
 
-    # Build the proper Referer — the detail page on macintoshgarden.org
+    # Use the stored token URL directly — page is fetched fresh (no cache)
+    # so tokens should be live when the user clicks
     referer_url = BASE_URL + detail_path
+    _http_session.cookies.update(cookies)
 
-    print("[macintoshgarden] Downloading %s with Referer: %s cookies=%s" % (file_url[:100], referer_url, list(cookies.keys())))
+    print("[macintoshgarden] Downloading %s with Referer: %s cookies=%s" % (file_url[:120], referer_url, list(cookies.keys())))
 
     try:
         # Download entire file — no chunked encoding.
         # MacWeb 2.0 (HTTP/1.0) can't handle chunked transfer.
-        # Use the persistent session with saved cookies for auth
-        _http_session.cookies.update(cookies)
-
         dl_resp = _http_session.get(
             file_url,
             headers={'Referer': referer_url},
