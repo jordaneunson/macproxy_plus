@@ -456,16 +456,16 @@ def handle_detail(path):
 
     if download_links:
         body.append('<table border="1" cellpadding="4" width="100%">')
-        body.append('<tr><th>File</th><th>Size</th><th>Mirror</th></tr>')
+        body.append('<tr><th>File</th><th>Size</th><th>Mirrors</th></tr>')
         for dl in download_links:
             fname = dl['filename']
             size = dl['size'] or ''
-            mirror = dl['mirror']
+            mirror_html = dl['mirror_html']
             proxy_href = dl['proxy_url']
             body.append('<tr>')
             body.append('<td><a href="' + proxy_href + '"><b>' + fname + '</b></a></td>')
             body.append('<td>' + size + '</td>')
-            body.append('<td>' + mirror + '</td>')
+            body.append('<td>' + mirror_html + '</td>')
             body.append('</tr>')
         body.append('</table>')
         body.append('<br>')
@@ -477,9 +477,8 @@ def handle_detail(path):
 
 
 def _extract_downloads(soup, path):
-    """Extract and normalize download links from a detail page."""
-    downloads = []
-    seen = set()
+    """Extract download links, grouping all mirrors per file."""
+    seen_hrefs = set()
 
     MIRROR_PATTERNS = [
         r'download\.macintoshgarden\.org',
@@ -493,7 +492,12 @@ def _extract_downloads(soup, path):
         r'macintoshgarden\.org/files',
     ]
     mirror_re = re.compile('|'.join(MIRROR_PATTERNS), re.I)
-    file_ext_re = re.compile(r'\.(sit|hqx|bin|zip|img|dsk|sea|cpt|tar|gz|dmg|toast|iso|7z)(\?.*)?$', re.I)
+    file_ext_re = re.compile(r'\.(sit|hqx|bin|zip|img|dsk|sea|cpt|tar|gz|dmg|toast|iso|7z|pdf)(\?.*)?$', re.I)
+
+    # Collect all download links grouped by filename
+    # file_groups[fname_key] = { 'filename': ..., 'size': ..., 'mirrors': [ {label, url, proxy_url}, ... ] }
+    file_groups = {}
+    file_order = []  # preserve order
 
     for a in soup.find_all('a', href=True):
         href = a['href']
@@ -513,38 +517,40 @@ def _extract_downloads(soup, path):
         if '/screenshots/' in href:
             continue
 
-        if href in seen:
+        if href in seen_hrefs:
             continue
-        seen.add(href)
+        seen_hrefs.add(href)
 
-        # Dedupe by filename — keep first mirror found for each file
-        fname_key = href.split('/')[-1].split('?')[0].lower()
-        if fname_key in seen:
-            continue
-        seen.add(fname_key)
-
-        # Keep the real URL (https) for actual downloading
+        # Normalize the URL
         real_url = href
         if real_url.startswith('//'):
             real_url = 'https:' + real_url
         elif not real_url.startswith('http'):
             real_url = 'https://' + real_url.lstrip('/')
-        # Ensure https for the CDN download
         if real_url.startswith('http://'):
             real_url = real_url.replace('http://', 'https://', 1)
 
-        mirror_label = 'Mirror'
-        if '.se' in href:
+        # Determine mirror label
+        mirror_label = 'WWW'
+        if 'download.macintoshgarden.org' in href:
+            mirror_label = 'Main'
+        elif '.se' in href:
             mirror_label = '.SE'
         elif '.de' in href:
             mirror_label = '.DE'
         elif 'r-fx.ca' in href:
             mirror_label = 'CA'
         elif 'files.macintoshgarden.org' in href:
-            mirror_label = 'Main'
+            mirror_label = 'Files'
+        elif 'ftp.macintoshgarden' in href:
+            mirror_label = 'FTP'
+        elif 'old.mac.gdn' in href:
+            mirror_label = 'Old'
 
         fname = href.split('/')[-1].split('?')[0] or text or 'download'
+        fname_key = fname.lower()
 
+        # Try to get file size from adjacent table cell
         size = ''
         td = a.find_parent('td')
         if td:
@@ -554,15 +560,41 @@ def _extract_downloads(soup, path):
                 if re.match(r'^\d+', candidate):
                     size = candidate
 
-        # Register with the real https URL — proxy will use it directly
+        # Register download for this mirror
         proxy_url = _register_download(real_url, path)
 
-        downloads.append({
-            'filename': fname,
-            'size': size,
-            'mirror': mirror_label,
-            'direct_url': real_url,
+        if fname_key not in file_groups:
+            file_groups[fname_key] = {
+                'filename': fname,
+                'size': size,
+                'mirrors': [],
+            }
+            file_order.append(fname_key)
+        elif size and not file_groups[fname_key]['size']:
+            file_groups[fname_key]['size'] = size
+
+        file_groups[fname_key]['mirrors'].append({
+            'label': mirror_label,
             'proxy_url': proxy_url,
+        })
+
+    # Build flat download list with mirror links
+    downloads = []
+    for fname_key in file_order:
+        group = file_groups[fname_key]
+        # First mirror is the primary download link
+        primary_url = group['mirrors'][0]['proxy_url']
+        # Build mirror column with all links
+        mirror_links = []
+        for m in group['mirrors']:
+            mirror_links.append('<a href="' + m['proxy_url'] + '">' + m['label'] + '</a>')
+        mirror_html = ' | '.join(mirror_links)
+
+        downloads.append({
+            'filename': group['filename'],
+            'size': group['size'],
+            'mirror_html': mirror_html,
+            'proxy_url': primary_url,
         })
 
     return downloads
