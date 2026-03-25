@@ -497,11 +497,13 @@ def _extract_downloads(soup, path):
     for small in soup.find_all('small'):
         i_tag = small.find('i')
         if i_tag:
-            small_text = small.get_text(strip=True)
             i_text = i_tag.get_text(strip=True).strip('()')
-            # Extract filename: everything before the <i> tag
-            fname_part = small_text.replace(i_tag.get_text(), '').strip().rstrip('(').strip()
-            if fname_part and i_text and ('MB' in i_text or 'KB' in i_text or 'GB' in i_text):
+            if not i_text or not ('MB' in i_text or 'KB' in i_text or 'GB' in i_text):
+                continue
+            # Get the text before the <i> tag by removing i_tag's text from small's text
+            small_text = small.get_text(strip=True)
+            fname_part = small_text.replace(i_tag.get_text(), '').strip().rstrip('(').rstrip(')').strip()
+            if fname_part:
                 size_map[fname_part.lower()] = i_text
 
     # Collect all download links grouped by filename
