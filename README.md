@@ -63,10 +63,6 @@ Both machines need to be on the same local network. Find your host machine's loc
   <em>Example: Configuring proxy settings in <a href="https://github.com/hunterirving/macweb-2.0c-plus">MacWeb 2.0c+</a></em>
 </p>
 
-### MacWeb Hotlist (Bookmarks)
-
-A pre-built hotlist file (`MacWeb_Hotlist.hqx`) is included with bookmarks for all the extensions. To use it, decode the BinHex file and place the resulting `MacWeb Hotlist` file in your MacWeb 2.0c folder on the vintage Mac.
-
 ---
 
 ## Available Extensions
