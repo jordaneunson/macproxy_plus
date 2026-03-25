@@ -407,7 +407,10 @@ def handle_search(query):
 def handle_detail(path):
     target = BASE_URL + path
     try:
-        content = fetch_cached(target)
+        # Always fetch fresh — download tokens expire in ~5 minutes,
+        # so cached pages would have dead tokens
+        resp = fetch(target)
+        content = resp.content
         soup = BeautifulSoup(content, 'html.parser')
     except requests.HTTPError as e:
         if e.response is not None and e.response.status_code == 404:
