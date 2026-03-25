@@ -578,12 +578,17 @@ def _extract_downloads(soup, path):
             'proxy_url': proxy_url,
         })
 
+    # Preferred mirror order — Old mirror works without token auth
+    MIRROR_PRIORITY = ['Old', 'FTP', '.SE', '.DE', 'CA', 'Files', 'Main', 'WWW']
+
     # Build flat download list with mirror links
     downloads = []
     for fname_key in file_order:
         group = file_groups[fname_key]
-        # First mirror is the primary download link
-        primary_url = group['mirrors'][0]['proxy_url']
+        # Pick best mirror as primary (prefer Old, then FTP, then others)
+        sorted_mirrors = sorted(group['mirrors'],
+            key=lambda m: MIRROR_PRIORITY.index(m['label']) if m['label'] in MIRROR_PRIORITY else 99)
+        primary_url = sorted_mirrors[0]['proxy_url']
         # Build mirror column with all links
         mirror_links = []
         for m in group['mirrors']:
