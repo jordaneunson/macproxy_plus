@@ -81,7 +81,7 @@ The setup script lets you pick and choose which extensions to enable. Here's wha
 | **mistral** | Mistral AI chat *(requires Mistral API key)* |
 | **notyoutube** | A legally distinct parody of YouTube — encodes video via [MacFlim](https://www.macflim.com/macflim2/) |
 | **npr** | Text-only NPR news articles |
-| **macintoshgarden** | Browse and download from the Macintosh Garden classic software archive |
+| **macintoshgarden** | *(WIP)* Browse and download from the Macintosh Garden classic software archive |
 | **reddit** | Browse subreddits with dithered black-and-white images |
 | **waybackmachine** | Browse the web as it existed on any date back to 1996 |
 | **weather** | US weather forecast by ZIP code |
@@ -93,7 +93,7 @@ The setup script lets you pick and choose which extensions to enable. Here's wha
 
 ## Extension Details
 
-### Macintosh Garden
+### Macintosh Garden *(WIP)*
 
 A purpose-built extension for browsing [macintoshgarden.org](https://macintoshgarden.org) — the classic Mac software archive. Features:
 
@@ -101,7 +101,7 @@ A purpose-built extension for browsing [macintoshgarden.org](https://macintoshga
 - **Browse by category** (Apps, Games) with alphabetical navigation and pagination
 - **Search** across the entire archive
 - **Detail pages** with metadata, descriptions, and compatibility info (68k/PPC compatibility, author, year, etc.)
-- **Download proxy** — downloads files through the proxy so your vintage Mac can grab them directly. Uses a session-based approach to handle the site's token-authenticated download links. Presents download tables with filename, size, and mirror info.
+- **Download proxy** *(not working)* — downloads files through the proxy so your vintage Mac can grab them directly. Uses a session-based approach to handle the site's token-authenticated download links. Presents download tables with filename, size, and mirror info.
 - **In-memory page caching** (15 min TTL) to reduce requests to the upstream site
 - All text cleaned for Mac Roman encoding compatibility
 
