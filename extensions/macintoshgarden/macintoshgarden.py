@@ -492,6 +492,18 @@ def _extract_downloads(soup, path):
     mirror_re = re.compile('|'.join(MIRROR_PATTERNS), re.I)
     file_ext_re = re.compile(r'\.(sit|hqx|bin|zip|img|dsk|sea|cpt|tar|gz|dmg|toast|iso|7z|pdf)(\?.*)?$', re.I)
 
+    # Build a filename -> size map from <small>filename <i>(SIZE)</i></small> elements
+    size_map = {}
+    for small in soup.find_all('small'):
+        i_tag = small.find('i')
+        if i_tag:
+            small_text = small.get_text(strip=True)
+            i_text = i_tag.get_text(strip=True).strip('()')
+            # Extract filename: everything before the <i> tag
+            fname_part = small_text.replace(i_tag.get_text(), '').strip().rstrip('(').strip()
+            if fname_part and i_text and ('MB' in i_text or 'KB' in i_text or 'GB' in i_text):
+                size_map[fname_part.lower()] = i_text
+
     # Collect all download links grouped by filename
     # file_groups[fname_key] = { 'filename': ..., 'size': ..., 'mirrors': [ {label, url, proxy_url}, ... ] }
     file_groups = {}
@@ -548,15 +560,8 @@ def _extract_downloads(soup, path):
         fname = href.split('/')[-1].split('?')[0] or text or 'download'
         fname_key = fname.lower()
 
-        # Try to get file size from adjacent table cell
-        size = ''
-        td = a.find_parent('td')
-        if td:
-            next_td = td.find_next_sibling('td')
-            if next_td:
-                candidate = next_td.get_text(strip=True)
-                if re.match(r'^\d+', candidate):
-                    size = candidate
+        # Look up file size from the <small> elements
+        size = size_map.get(fname_key, '')
 
         # Register download for this mirror
         proxy_url = _register_download(real_url, path)
