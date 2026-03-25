@@ -107,30 +107,28 @@ A purpose-built extension for browsing [macintoshgarden.org](https://macintoshga
 
 ### Reddit
 
-Browse Reddit through [old.reddit.com](https://old.reddit.com) with a simplified, vintage-friendly layout. Features:
+Changes from upstream:
 
-- **Subreddit listings** with post titles, authors, timestamps, and point counts
-- **Comment threads** with nested replies (limited to 10 top-level comments, 3 levels deep to keep page sizes manageable)
-- **Dithered black-and-white images** for post previews
-- **Outbound article proxy** — when a Reddit post links to an external article, clicking the title fetches the article through the proxy with all images, CSS, and JavaScript stripped out. Your vintage Mac gets clean, readable text without choking on modern web bloat.
-- **Navigation** between hot/new/top and pagination
+- **Outbound article proxy** — post titles linking to external sites are now clickable. Fetches the article through the proxy with all images, CSS, and JavaScript stripped out so the vintage Mac gets clean, readable text.
+- **Definition list layout** — posts and comment page headers use `<dl>/<dt>/<dd>` instead of elements MacWeb can't render properly.
+- **Comment limits** — capped at 10 top-level comments, 3 levels deep to keep page sizes manageable for 4MB Macs.
+- **ASCII substitution** — smart quotes, em dashes, and other Unicode converted to ASCII for Mac Roman compatibility.
 
 ### Hackaday
 
-Text-only [Hackaday](https://hackaday.com) — articles, comments, and search. Features:
+Changes from upstream:
 
-- **Front page** with featured articles in a clean definition list layout
-- **Article pages** with full text content
-- Stripped of sidebar clutter (Recent Comments, From The Blog, etc.)
-- HTTPS links rewritten to HTTP for classic browser compatibility
-- ASCII substitution for smart quotes, dashes, and symbols
+- **Definition list layout** — front page articles use `<dl>` for clean rendering on MacWeb.
+- **Stripped sidebar clutter** — removed Recent Comments, From The Blog sections.
+- **HTTPS → HTTP** — all links rewritten for classic browser compatibility.
+- **ASCII substitution** for smart quotes, dashes, and symbols.
 
 ### jordaneunson
 
-Personal page extension for [jordaneunson.com](https://jordaneunson.com). Features:
+Changes from upstream:
 
-- **Recipe pages** with Monaco font, line numbers, and bullet list formatting
-- Optimized whitespace handling for vintage browsers
+- **Recipe formatting** — Monaco font, line numbers, bullet list fixes.
+- **Whitespace handling** optimized for vintage browsers.
 
 ### General Improvements
 
