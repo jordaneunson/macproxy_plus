@@ -458,6 +458,9 @@ def process_content(content, url, request=None):
 					dd = new_soup.new_tag('dd')
 					font = new_soup.new_tag('font', size="2")
 					author = thing.get('data-author', 'Unknown')
+					subreddit = thing.get('data-subreddit', '')
+					if subreddit:
+						font.append(f"r/{subreddit} | ")
 					font.append(f"{author} | ")
 					
 					time_element = thing.find('time', class_='live-timestamp')
