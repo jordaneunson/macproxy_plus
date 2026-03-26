@@ -101,7 +101,7 @@ A purpose-built extension for browsing [macintoshgarden.org](https://macintoshga
 - **Browse by category** (Apps, Games) with alphabetical navigation and pagination
 - **Search** across the entire archive
 - **Detail pages** with metadata, descriptions, file sizes, and compatibility info
-- **Download proxy** — downloads files through the proxy so your vintage Mac can grab them directly. Automatically selects the best available mirror (prefers mirrors without token auth). Download tables show filename and file size.
+- **Download proxy** — downloads files through the proxy so your vintage Mac can grab them directly. Automatically selects the best available mirror (prefers mirrors without token auth). Download tables show filename, OS compatibility range, and file size.
 - **Multi-mirror support** — each file may have multiple download mirrors (Main, .SE, .DE, CA, FTP, Old). The extension prioritizes mirrors that serve files directly without CDN token authentication.
 - **Persistent session** — maintains cookies across requests to macintoshgarden.org for consistent browsing
 - All text cleaned for Mac Roman encoding compatibility
@@ -110,6 +110,7 @@ A purpose-built extension for browsing [macintoshgarden.org](https://macintoshga
 
 Changes from upstream:
 
+- **Subreddit labels** — post listings show the subreddit each post is from (`r/subreddit`) alongside the author, time, and score.
 - **Outbound article proxy** — post titles linking to external sites are now clickable. Fetches the article through the proxy with all images, CSS, and JavaScript stripped out so the vintage Mac gets clean, readable text.
 - **Definition list layout** — posts and comment page headers use `<dl>/<dt>/<dd>` instead of elements MacWeb can't render properly.
 - **Comment limits** — capped at 10 top-level comments, 3 levels deep to keep page sizes manageable for 4MB Macs.
