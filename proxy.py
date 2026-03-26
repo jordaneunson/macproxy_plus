@@ -282,6 +282,15 @@ def handle_default_request():
 		if resp.status_code in (301, 302, 303, 307, 308) and 'Location' in resp.headers:
 			location = resp.headers['Location'].replace('https://', 'http://')
 			print(f"Redirect {resp.status_code} -> {location}")
+			# If rewriting https->http produced the same URL we just fetched,
+			# follow it server-side to avoid an infinite redirect loop
+			# (e.g. http://example.com -> https://example.com -> http://example.com -> ...)
+			if location == url:
+				resp = send_request(location, headers)
+				content = resp.content
+				status_code = resp.status_code
+				resp_headers = dict(resp.headers)
+				return process_response((content, status_code, resp_headers), url)
 			return Response(
 				'',
 				status=resp.status_code,
