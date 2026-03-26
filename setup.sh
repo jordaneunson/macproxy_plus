@@ -49,6 +49,17 @@ print_err() {
 check_docker() {
   print_step "Checking for Docker..."
 
+  # Probe known Docker Desktop locations not always on PATH
+  for _docker_candidate in \
+    "/Applications/Docker.app/Contents/Resources/bin" \
+    "/usr/local/bin" \
+    "/usr/bin" \
+    "$HOME/.docker/bin"; do
+    if [ -x "$_docker_candidate/docker" ] && ! command -v docker &>/dev/null; then
+      export PATH="$_docker_candidate:$PATH"
+    fi
+  done
+
   if ! command -v docker &>/dev/null; then
     print_err "Docker is not installed."
     echo ""
