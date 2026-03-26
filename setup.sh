@@ -366,7 +366,7 @@ collect_credentials() {
 
     while true; do
       if [[ "$key" == *TOKEN* || "$key" == *KEY* ]]; then
-        read -rsp "  $prompt: " value
+        read -rp "  $prompt: " value
         echo ""
       else
         read -rp "  $prompt: " value
