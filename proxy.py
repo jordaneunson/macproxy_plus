@@ -279,36 +279,19 @@ def handle_default_request():
 
 		# Pass redirects back to the client so the browser updates its URL
 		# (important for relative link resolution).
-		# Exception: if the redirect would loop (https->http rewrite produces same URL)
-		# or the destination differs only by scheme/www, follow server-side to avoid
-		# the browser getting stuck in an infinite redirect loop.
+		# Exception: if rewriting https->http produces the same URL we just requested,
+		# the browser would loop forever. In that case, follow the full chain server-side.
 		if resp.status_code in (301, 302, 303, 307, 308) and 'Location' in resp.headers:
 			location = resp.headers['Location'].replace('https://', 'http://')
 			print(f"Redirect {resp.status_code} -> {location}")
-			# Follow server-side if the rewritten location is the same as the current URL
-			# (pure https->http loop) or only differs by www prefix (common redirect chain)
-			import urllib.parse as _urlparse
-			_orig = _urlparse.urlparse(url)
-			_dest = _urlparse.urlparse(location)
-			_orig_host = _orig.netloc.lower().lstrip('www.')
-			_dest_host = _dest.netloc.lower().lstrip('www.')
-			_same_host = (_orig_host == _dest_host)
-			if location == url or (_same_host and _orig.path == _dest.path):
-				# Follow the full redirect chain server-side, up to 10 hops
-				current_url = location
-				for _ in range(10):
-					resp = send_request(current_url, headers)
-					if resp.status_code not in (301, 302, 303, 307, 308) or 'Location' not in resp.headers:
-						break
-					next_loc = resp.headers['Location'].replace('https://', 'http://')
-					print(f"Server-side follow {resp.status_code} -> {next_loc}")
-					if next_loc == current_url:
-						break
-					current_url = next_loc
+			if location == url:
+				# Follow entire redirect chain server-side with allow_redirects=True
+				print(f"Detected redirect loop, following server-side")
+				resp = send_request(location, headers, allow_redirects=True)
 				content = resp.content
 				status_code = resp.status_code
 				resp_headers = dict(resp.headers)
-				return process_response((content, status_code, resp_headers), current_url)
+				return process_response((content, status_code, resp_headers), resp.url.replace('https://', 'http://'))
 			return Response(
 				'',
 				status=resp.status_code,
@@ -340,12 +323,12 @@ def prepare_headers():
 	}
 	return headers
 
-def send_request(url, headers):
+def send_request(url, headers, allow_redirects=False):
 	print(f"Sending request to: {url}")
 	if request.method == "POST":
 		return session.post(url, data=request.form, headers=headers, allow_redirects=True)
 	else:
-		return session.get(url, params=request.args, headers=headers, allow_redirects=False)
+		return session.get(url, params=request.args, headers=headers, allow_redirects=allow_redirects)
 
 @app.after_request
 def apply_caching(resp):
