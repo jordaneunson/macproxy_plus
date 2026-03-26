@@ -278,19 +278,37 @@ def handle_default_request():
 		resp = send_request(url, headers)
 
 		# Pass redirects back to the client so the browser updates its URL
-		# (important for relative link resolution)
+		# (important for relative link resolution).
+		# Exception: if the redirect would loop (https->http rewrite produces same URL)
+		# or the destination differs only by scheme/www, follow server-side to avoid
+		# the browser getting stuck in an infinite redirect loop.
 		if resp.status_code in (301, 302, 303, 307, 308) and 'Location' in resp.headers:
 			location = resp.headers['Location'].replace('https://', 'http://')
 			print(f"Redirect {resp.status_code} -> {location}")
-			# If rewriting https->http produced the same URL we just fetched,
-			# follow it server-side to avoid an infinite redirect loop
-			# (e.g. http://example.com -> https://example.com -> http://example.com -> ...)
-			if location == url:
-				resp = send_request(location, headers)
+			# Follow server-side if the rewritten location is the same as the current URL
+			# (pure https->http loop) or only differs by www prefix (common redirect chain)
+			import urllib.parse as _urlparse
+			_orig = _urlparse.urlparse(url)
+			_dest = _urlparse.urlparse(location)
+			_orig_host = _orig.netloc.lower().lstrip('www.')
+			_dest_host = _dest.netloc.lower().lstrip('www.')
+			_same_host = (_orig_host == _dest_host)
+			if location == url or (_same_host and _orig.path == _dest.path):
+				# Follow the full redirect chain server-side, up to 10 hops
+				current_url = location
+				for _ in range(10):
+					resp = send_request(current_url, headers)
+					if resp.status_code not in (301, 302, 303, 307, 308) or 'Location' not in resp.headers:
+						break
+					next_loc = resp.headers['Location'].replace('https://', 'http://')
+					print(f"Server-side follow {resp.status_code} -> {next_loc}")
+					if next_loc == current_url:
+						break
+					current_url = next_loc
 				content = resp.content
 				status_code = resp.status_code
 				resp_headers = dict(resp.headers)
-				return process_response((content, status_code, resp_headers), url)
+				return process_response((content, status_code, resp_headers), current_url)
 			return Response(
 				'',
 				status=resp.status_code,
