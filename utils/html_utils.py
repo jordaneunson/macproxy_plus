@@ -17,6 +17,29 @@ from utils.system_utils import load_preset
 config = load_preset()
 
 
+# Common Unicode → ASCII map for classic Mac browsers
+ASCII_CHAR_MAP = {
+	'\u2018': "'", '\u2019': "'", '\u201C': '"', '\u201D': '"',
+	'\u2013': '-', '\u2014': '--', '\u2026': '...', '\u00A0': ' ',
+	'\u2032': "'", '\u2033': '"', '\u00AB': '<<', '\u00BB': '>>',
+	'\u2022': '*', '\u00B7': '*', '\u2010': '-', '\u2011': '-',
+	'\u2012': '-', '\u2015': '--', '\u2212': '-', '\u00D7': 'x',
+	'\u00F7': '/', '\u2190': '<-', '\u2192': '->', '\u2264': '<=',
+	'\u2265': '>=', '\u00A9': '(c)', '\u00AE': '(R)', '\u2122': '(TM)',
+	'\u00BC': '1/4', '\u00BD': '1/2', '\u00BE': '3/4', '\u00B0': ' deg',
+}
+
+def sanitize_ascii(text):
+	"""Replace common Unicode characters with ASCII equivalents,
+	then replace any remaining non-ASCII with '?'.
+	Works on str input, returns str."""
+	if isinstance(text, bytes):
+		text = text.decode('utf-8', errors='replace')
+	for char, replacement in ASCII_CHAR_MAP.items():
+		text = text.replace(char, replacement)
+	return ''.join(ch if ord(ch) < 128 else '?' for ch in text)
+
+
 class URLAwareHTMLFormatter(HTMLFormatter):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)

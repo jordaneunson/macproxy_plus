@@ -89,8 +89,6 @@ def handle_request(request):
 
 def handle_outbound(target_url):
 	"""Fetch an external page linked from Reddit, strip images and heavy content."""
-	char_map = _get_char_map()
-
 	try:
 		headers = {'User-Agent': USER_AGENT}
 		resp = requests.get(target_url, headers=headers, allow_redirects=True, timeout=15)
@@ -146,32 +144,7 @@ def handle_outbound(target_url):
 		f'</body></html>'
 	)
 
-	return _ascii_clean(html, char_map), 200
-
-
-def _get_char_map():
-	return {
-		'\u2018': "'", '\u2019': "'", '\u201C': '"', '\u201D': '"',
-		'\u2013': '-', '\u2014': '--', '\u2026': '...', '\u00A0': ' ',
-		'\u2032': "'", '\u2033': '"', '\u00AB': '<<', '\u00BB': '>>',
-		'\u2022': '*', '\u00B7': '*', '\u2010': '-', '\u2011': '-',
-		'\u2012': '-', '\u2015': '--', '\u2212': '-', '\u00D7': 'x',
-		'\u00F7': '/', '\u2190': '<-', '\u2192': '->', '\u2264': '<=',
-		'\u2265': '>=', '\u00A9': '(c)', '\u00AE': '(R)', '\u2122': '(TM)',
-		'\u00BC': '1/4', '\u00BD': '1/2', '\u00BE': '3/4', '\u00B0': ' deg',
-	}
-
-
-def _ascii_clean(html, char_map):
-	for char, replacement in char_map.items():
-		html = html.replace(char, replacement)
-	cleaned = []
-	for ch in html:
-		if ord(ch) < 128:
-			cleaned.append(ch)
-		else:
-			cleaned.append('?')
-	return ''.join(cleaned)
+	return html, 200
 
 
 def process_comments(comments, parent_element, new_soup, depth=0, max_depth=None):
@@ -515,4 +488,4 @@ def process_content(content, url, request=None):
 				nav_right.append(new_next)
 
 	updated_html = str(new_soup)
-	return _ascii_clean(updated_html, _get_char_map()), 200
+	return updated_html, 200

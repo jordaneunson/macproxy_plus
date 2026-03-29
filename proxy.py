@@ -12,7 +12,7 @@ from werkzeug.serving import get_interface_ip
 from werkzeug.wrappers.response import Response as WerkzeugResponse
 
 # First-party imports
-from utils.html_utils import transcode_html, transcode_content
+from utils.html_utils import transcode_html, transcode_content, sanitize_ascii
 from utils.image_utils import is_image_url, fetch_and_cache_image, CACHE_DIR
 from utils.system_utils import load_preset
 
@@ -88,6 +88,8 @@ def handle_request(path):
 	override_response = handle_override_extension(scheme)
 	if override_response is not None:
 		if isinstance(override_response, (Response, WerkzeugResponse)):
+			if override_response.content_type and 'text/html' in override_response.content_type:
+				override_response.set_data(sanitize_ascii(override_response.get_data(as_text=True)))
 			return override_response
 		if isinstance(override_response, tuple):
 			content = override_response[0]
@@ -98,12 +100,15 @@ def handle_request(path):
 		if isinstance(content, bytes):
 			content = content.decode('utf-8', errors='replace')
 		content = content.replace('https://', 'http://')
+		content = sanitize_ascii(content)
 		return Response(content, status=status_code, content_type='text/html')
 
 	matching_extension = find_matching_extension(host)
 	if matching_extension:
 		response = handle_matching_extension(matching_extension)
 		if isinstance(response, (Response, WerkzeugResponse)):
+			if response.content_type and 'text/html' in response.content_type:
+				response.set_data(sanitize_ascii(response.get_data(as_text=True)))
 			return response
 		# Wrap extension responses to skip transcoding but convert https to http
 		if isinstance(response, tuple):
@@ -115,6 +120,7 @@ def handle_request(path):
 		if isinstance(content, bytes):
 			content = content.decode('utf-8', errors='replace')
 		content = content.replace('https://', 'http://')
+		content = sanitize_ascii(content)
 		return Response(content, status=status_code, content_type='text/html')
 	
 	# Only handle image requests here if we're not using an extension
