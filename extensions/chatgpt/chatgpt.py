@@ -39,9 +39,9 @@ HTML_TEMPLATE = """
 	<title>ChatGPT</title>
 </head>
 <body>
+	<form method="post" action="/">
 	<table width="100%"><tr>
 		<td align="left">
-			<form method="post" action="/">
 			<select id="model" name="model">
 				<option value="gpt-5.4" {{ 'selected' if selected_model == 'gpt-5.4' else '' }}>GPT-5.4 (Flagship)</option>
 				<option value="gpt-4.1" {{ 'selected' if selected_model == 'gpt-4.1' else '' }}>GPT-4.1 (Mid-tier)</option>
@@ -51,11 +51,11 @@ HTML_TEMPLATE = """
 			</select>
 		</td>
 		<td align="right">
-			<form method="get" action="/"><input type="hidden" name="action" value="new"><input type="submit" value="New Chat"></form>
+			<a href="/?action=new">New Chat</a>
 		</td>
 	</tr></table>
-		<input type="text" size="63" name="command" required autocomplete="off">
-		<input type="submit" value="Submit">
+	<input type="text" size="63" name="command" required autocomplete="off">
+	<input type="submit" value="Submit">
 	</form>
 	<div id="chat">
 		<p>{{ output|safe }}</p>
