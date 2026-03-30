@@ -473,7 +473,74 @@ def handle_detail(path):
     else:
         body.append('<p>No download links found on this page.</p>')
 
+    # --- Download notes / body text ---
+    # On Macintosh Garden, descriptive text and per-download notes appear as
+    # <p> tags (and occasional <div class="note ..."> blocks) between the last
+    # download/emulation section and <div id="comments">.
+    notes_html = _extract_body_notes(soup)
+    if notes_html:
+        body.append('<hr>')
+        body.append('<b>Notes:</b>')
+        body.append(notes_html)
+
     return make_page(page_title + ' - Macintosh Garden', '\n'.join(body))
+
+
+def _extract_body_notes(soup):
+    """Extract the descriptive paragraphs and note divs that appear between
+    the download/emulation section and the comments on a detail page."""
+    page_html = str(soup)
+
+    # Find the end of the last emulation or download note div
+    # These mark the boundary after which body text / download notes appear
+    start_pos = 0
+
+    # Look for the emulation div (appears after downloads)
+    emulation_match = re.search(
+        r'<div class="note emulation">.*?</div>\s*</div>\s*</div>',
+        page_html, re.DOTALL)
+    if emulation_match:
+        start_pos = emulation_match.end()
+    else:
+        # Fall back to last download note div
+        for m in re.finditer(r'</small></br>\s*</div>', page_html):
+            start_pos = m.end()
+
+    if not start_pos:
+        return ''
+
+    # Find the comments section
+    comments_match = re.search(r'<div id="comments">', page_html)
+    end_pos = comments_match.start() if comments_match else len(page_html)
+
+    between = page_html[start_pos:end_pos]
+
+    # Extract <p> tags and <div class="note ..."> blocks
+    parts = []
+
+    for m in re.finditer(r'<p>(.*?)</p>', between, re.DOTALL):
+        p_content = m.group(1).strip()
+        if not p_content:
+            continue
+        # Skip the Compatibility/Architecture line — already handled above
+        if p_content.startswith('Architecture:') or p_content.startswith('<strong>Compatibility'):
+            continue
+        # Convert links to http
+        p_content = p_content.replace('https://', 'http://')
+        # Strip complex HTML but keep <b>, <i>, <a>, <br>
+        p_content = re.sub(r'<(?!/?(?:b|i|a|br|font)\b)[^>]+>', '', p_content)
+        parts.append('<p>' + p_content + '</p>')
+
+    for m in re.finditer(r'<div class="note (manual|download)"[^>]*>(.*?)</div>', between, re.DOTALL):
+        note_type = m.group(1)
+        note_content = m.group(2).strip()
+        if not note_content:
+            continue
+        note_content = note_content.replace('https://', 'http://')
+        note_content = re.sub(r'<(?!/?(?:b|i|a|br|strong|font)\b)[^>]+>', '', note_content)
+        parts.append('<blockquote>' + note_content + '</blockquote>')
+
+    return '\n'.join(parts)
 
 
 def _extract_downloads(soup, path):
