@@ -7,7 +7,7 @@ import re
 # Third-party imports
 from bs4 import BeautifulSoup
 from bs4.formatter import HTMLFormatter
-from flask import current_app, url_for
+from flask import request as flask_request, url_for
 
 # First-party imports
 from utils.image_utils import fetch_and_cache_image
@@ -209,7 +209,7 @@ def transcode_html(html, url=None, whitelisted_domains=None, simplify_html=False
 		# always return `localhost` instead of our host IP / port. So grab that
 		# info from the app config directly and prepend it to a relative URL instead.
 		relative_url = url_for('serve_cached_image', filename=f"{fake_url}.{extension}")
-		url = f"http://{current_app.config['MACPROXY_HOST_AND_PORT']}{relative_url}"
+		url = f"http://{flask_request.host}{relative_url}"
 		img_attrs = {"src": url}
 		if "height" in svg_attrs:
 			img_attrs["height"] = svg_attrs["height"]

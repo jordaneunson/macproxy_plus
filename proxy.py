@@ -2,13 +2,11 @@
 import argparse
 import os
 import shutil
-import socket
 from urllib.parse import urlparse
 
 # Third-party imports
 import requests
 from flask import Flask, request, session, g, abort, Response, send_from_directory
-from werkzeug.serving import get_interface_ip
 from werkzeug.wrappers.response import Response as WerkzeugResponse
 
 # First-party imports
@@ -344,27 +342,8 @@ def apply_caching(resp):
 		pass
 	return resp
 
-def get_proxy_hostname(hostname):
-	# Based on the `log_startup` function from werkzeug.serving.
-	# Translates a "bind all addresses" string into a real IP
-	# (or returns the hostname if one was set)
-	if hostname == "0.0.0.0":
-		display_hostname = get_interface_ip(socket.AF_INET)
-	elif hostname == "::":
-		display_hostname = get_interface_ip(socket.AF_INET6)
-	else:
-		display_hostname = hostname
-	return display_hostname
-
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Macproxy command line arguments")
-	parser.add_argument(
-		"--host",
-		type=str,
-		default="0.0.0.0",
-		action="store",
-		help="Host IP the web server will run on",
-	)
 	parser.add_argument(
 		"--port",
 		type=int,
@@ -374,10 +353,4 @@ if __name__ == "__main__":
 	)
 	arguments = parser.parse_args()
 
-	# Translate the bind address (typically 0.0.0.0 or ::) to a friendly
-	# hostname / IP, and store it and the port in the application config
-	# object. This will be used if we need to generate URLs to the proxy itself
-	# in the HTML (as opposed to the site we are proxying the request to).
-	app.config['MACPROXY_HOST_AND_PORT'] = f"{get_proxy_hostname(arguments.host)}:{arguments.port}"
-
-	app.run(host=arguments.host, port=arguments.port, debug=False)
+	app.run(host="0.0.0.0", port=arguments.port, debug=False)
